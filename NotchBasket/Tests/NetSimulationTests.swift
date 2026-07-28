@@ -141,4 +141,50 @@ final class NetSimulationTests: XCTestCase {
             )
         }
     }
+
+    func testWideningOneRingPullsTheRingBelowUpwardAndInward() {
+        let simulation = NetRingSimulation()
+        let restCenterY = simulation.rings[5].restCenterY
+        let restRadius = simulation.rings[5].restRadius
+        simulation.widenRingForTesting(at: 4, by: 22)
+
+        for _ in 0..<12 {
+            simulation.step(deltaTime: 1.0 / 60.0)
+        }
+
+        XCTAssertGreaterThan(simulation.rings[5].centerY, restCenterY)
+        XCTAssertLessThan(simulation.rings[5].radius, restRadius)
+    }
+
+    func testDeformationWavePropagatesDownward() {
+        let simulation = NetRingSimulation()
+        simulation.widenRingForTesting(at: 2, by: 20)
+
+        var ringThreeMovedAtStep: Int?
+        var ringSevenMovedAtStep: Int?
+        for stepIndex in 0..<90 {
+            simulation.step(deltaTime: 1.0 / 240.0)
+            let threeMoved = abs(
+                simulation.rings[3].centerY - simulation.rings[3].restCenterY
+            ) > 0.05
+            let sevenMoved = abs(
+                simulation.rings[7].centerY - simulation.rings[7].restCenterY
+            ) > 0.05
+            if threeMoved, ringThreeMovedAtStep == nil {
+                ringThreeMovedAtStep = stepIndex
+            }
+            if sevenMoved, ringSevenMovedAtStep == nil {
+                ringSevenMovedAtStep = stepIndex
+            }
+        }
+
+        guard let three = ringThreeMovedAtStep, let seven = ringSevenMovedAtStep else {
+            return XCTFail("the disturbance never reached both rings")
+        }
+        XCTAssertLessThan(
+            three,
+            seven,
+            "the disturbance must reach ring 3 before ring 7"
+        )
+    }
 }

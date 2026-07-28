@@ -48,6 +48,10 @@ final class NetRingSimulation {
     private let swayDamping: CGFloat = 6
     private let ringGravity: CGFloat = -30
 
+    private let cordStiffness: CGFloat = 340
+    private let swayCoupling: CGFloat = 120
+    private var cordRestLengths: [CGFloat] = []
+
     private let substepDuration: CGFloat = 1.0 / 240.0
 
     init() {
@@ -77,6 +81,13 @@ final class NetRingSimulation {
         }
     }
 
+    /// Test seam: stretches one loop the way a ball passing through would,
+    /// without needing a ball.
+    func widenRingForTesting(at index: Int, by amount: CGFloat) {
+        guard rings.indices.contains(index), !rings[index].isPinned else { return }
+        rings[index].radius += amount
+    }
+
     func step(deltaTime: CGFloat) {
         let time = min(max(deltaTime, 0), 1.0 / 30.0)
         guard time > 0 else { return }
@@ -103,6 +114,11 @@ final class NetRingSimulation {
                 isPinned: index == 0
             ))
         }
+        cordRestLengths = (0..<(rings.count - 1)).map { index in
+            let dropDistance = rings[index].restCenterY - rings[index + 1].restCenterY
+            let radiusDifference = rings[index].restRadius - rings[index + 1].restRadius
+            return hypot(dropDistance, radiusDifference)
+        }
     }
 
     private func integrate(deltaTime: CGFloat) {
@@ -128,7 +144,43 @@ final class NetRingSimulation {
             rings[index].centerY += rings[index].centerYVelocity * deltaTime
             rings[index].centerX += rings[index].centerXVelocity * deltaTime
         }
+        applyCordCoupling(deltaTime: deltaTime)
         enforceRingOrder()
+    }
+
+    /// Cords barely stretch, so the distance between neighbouring loops — a
+    /// combination of drop and radius change — is what actually resists. When a
+    /// ball forces one loop open, this is the term that hauls the loop below it
+    /// up and in, and later throws the net back out.
+    private func applyCordCoupling(deltaTime: CGFloat) {
+        for index in 0..<(rings.count - 1) {
+            let upper = rings[index]
+            let lower = rings[index + 1]
+            let dropDistance = upper.centerY - lower.centerY
+            let radiusDifference = upper.radius - lower.radius
+            let length = max(hypot(dropDistance, radiusDifference), 0.001)
+            let stretch = length - cordRestLengths[index]
+            let force = cordStiffness * stretch
+            let dropAxis = dropDistance / length
+            let radiusAxis = radiusDifference / length
+
+            if !rings[index].isPinned {
+                rings[index].centerYVelocity -= force * dropAxis * deltaTime
+                rings[index].radiusVelocity -= force * radiusAxis * deltaTime
+            }
+            rings[index + 1].centerYVelocity += force * dropAxis * deltaTime
+            rings[index + 1].radiusVelocity += force * radiusAxis * deltaTime
+
+            // Sway is carried down the skirt rather than resisted: each loop is
+            // dragged toward the lateral position of the one above it.
+            let swayDifference = upper.centerX - lower.centerX
+            rings[index + 1].centerXVelocity +=
+                swayCoupling * swayDifference * deltaTime
+            if !rings[index].isPinned {
+                rings[index].centerXVelocity -=
+                    swayCoupling * swayDifference * deltaTime * 0.35
+            }
+        }
     }
 
     /// The loops are stacked, so loop i can never rise above loop i-1. Enforcing
