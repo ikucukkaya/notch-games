@@ -115,4 +115,30 @@ final class NetSimulationTests: XCTestCase {
             )
         }
     }
+
+    func testRadiusFloorClampHoldsWhenRingsAreCrushedInward() {
+        let simulation = NetRingSimulation()
+
+        // Push rings inward (negative radiusOffset) to violate radius floor clamp.
+        // bottomHalfWidth = 18, so minimumRadius = 6.3
+        // Rest radii range from 48.5 (top) down to 18 (bottom).
+        // We use radiusOffset = -20 to ensure all rings, especially the bottom one,
+        // are pushed well below the minimum clamp.
+        simulation.disturbForTesting(radiusOffset: -20, sagOffset: 0, swayOffset: 0)
+
+        // Let the constraint enforcement run
+        simulation.step(deltaTime: 1.0 / 60.0)
+
+        // Minimum clamp as defined in enforceRingOrder()
+        let minimumRadius = NetRingSimulation.bottomHalfWidth * 0.35
+
+        // Check that all free rings stay at or above the minimum radius floor
+        for index in 1..<NetRingSimulation.ringCount {
+            XCTAssertGreaterThanOrEqual(
+                simulation.rings[index].radius,
+                minimumRadius,
+                "ring \(index) radius must not go below minimum radius"
+            )
+        }
+    }
 }
