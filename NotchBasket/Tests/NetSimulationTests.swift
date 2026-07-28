@@ -76,4 +76,43 @@ final class NetSimulationTests: XCTestCase {
         XCTAssertEqual(simulation.rings[0].centerY, 0)
         XCTAssertNotEqual(simulation.rings[5].centerY, simulation.rings[5].restCenterY)
     }
+
+    func testRingOrderClampHoldsWhenRingsArePushedOutOfOrder() {
+        let simulation = NetRingSimulation()
+
+        // Push rings upward (positive sagOffset) to violate ordering constraint,
+        // and push radius way above the ceiling to violate radius clamp.
+        // bottomHalfWidth = 18, so minimumRadius = 6.3
+        // topHalfWidth = 48.5, so maximumRadius = 87.3
+        // We use sagOffset = 50 and radiusOffset = 100 to ensure violation.
+        simulation.disturbForTesting(radiusOffset: 100, sagOffset: 50, swayOffset: 0)
+
+        // Let the constraint enforcement run
+        simulation.step(deltaTime: 1.0 / 60.0)
+
+        // Clamp bounds as defined in enforceRingOrder()
+        let minimumRadius = NetRingSimulation.bottomHalfWidth * 0.35
+        let maximumRadius = NetRingSimulation.topHalfWidth * 1.8
+        let minimumDrop: CGFloat = 1.5
+
+        // Check that all rings obey both clamps
+        for index in 1..<NetRingSimulation.ringCount {
+            let ceilingY = simulation.rings[index - 1].centerY - minimumDrop
+            XCTAssertLessThanOrEqual(
+                simulation.rings[index].centerY,
+                ceilingY,
+                "ring \(index) centerY must not exceed ceiling defined by ring \(index - 1)"
+            )
+            XCTAssertGreaterThanOrEqual(
+                simulation.rings[index].radius,
+                minimumRadius,
+                "ring \(index) radius must not go below minimum radius"
+            )
+            XCTAssertLessThanOrEqual(
+                simulation.rings[index].radius,
+                maximumRadius,
+                "ring \(index) radius must not exceed maximum radius"
+            )
+        }
+    }
 }
