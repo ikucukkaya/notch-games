@@ -56,7 +56,9 @@ File 11 halkadan oluşur (`ringCount = 11`, indeks 0–10). Her halkanın 3 serb
 | `centerY` | halkanın sarkması | orta | `-depth · t^1.04` |
 | `centerX` | yanal savrulma | yumuşak | `0` |
 
-`t = i / (ringCount − 1)`. Mevcut geometri sabitleri korunur: `topHalfWidth = GameTuning.rimPostOffset − GameTuning.rimPostRadius`, `bottomHalfWidth = 31`, `depth = 76`.
+`t = i / (ringCount − 1)`. `topHalfWidth = GameTuning.rimPostOffset − GameTuning.rimPostRadius`, `depth = 76` — ikisi de mevcut değerler.
+
+`bottomHalfWidth` **31'den 18'e düşürülür.** Eski kumaş modelindeki 31, topun 24 birimlik yarıçapından geniş: tam ortadan giren bir top filenin boyunca hiçbir ipe değmeden düşebiliyordu, yani temiz swish'te file hiç şişmiyordu. Gerçek filenin ağzı toptan dardır ve top tarafından gerilmek zorundadır — swish dediğimiz şey zaten o gerilmedir. Bu, "file çok sert / az oynuyor" şikâyetinin ölçülebilir kısmının doğrudan sebebi.
 
 Halka 0 çembere sabittir (pinned): üç DOF'u da dinlenme değerinde kilitli.
 
@@ -86,8 +88,10 @@ Bu tek formül bütün durumları kapsar: top file **içinde**, **dışında**, 
 
 **Etki, eşit ve zıt:**
 
-- Halkaya: `radiusᵢ`, `centerXᵢ`, `yᵢ` girinti yönünde itilir.
-- Topa: aynı büyüklükte ters kuvvet, `n̂` yönünde.
+- Halkaya: `radiusᵢ`, `centerXᵢ`, `yᵢ` girintinin **tersi** yönde itilir — içerideki top halkayı açar, dışarıdaki top sıkar.
+- Topa: aynı büyüklükte kuvvet, `n̂` yönünde.
+
+**Eksen simetrisi.** Yatay bileşenler `axialFraction = |bx − centerXᵢ| / radiusᵢ` ile ölçeklenir. Tam eksende duran topu halka her yönden eşit sıkıştırır, yanal bileşenler birbirini götürür; bu çarpan olmadan radyal yön eksende tanımsız kalır ve kusursuz bir swish yana tekme yer.
 
 Toplam kuvvet `SKPhysicsBody.applyForce` ile gerçek fizik gövdesine verilir. `ball.position` **hiçbir zaman** elle atanmaz (aşağıdaki sayısal emniyet hariç).
 
@@ -194,6 +198,8 @@ Yeni testler:
 9. `testNetDeceleratesDescendingBall` — filenin topa gerçekten kuvvet uyguladığını doğrular. **Orijinal hatayı yakalayacak olan test budur**; eski sette karşılığı yoktu.
 10. `testDeformationWavePropagatesDownward` — 3. halka 7. halkadan önce deforme olur; scripted swish'in dönmediğinin kanıtı.
 11. `testContactAppliesRegardlessOfScoring` — potanın altından ve yandan gelen temasların da kuvvet ürettiğini doğrular.
+12. `testCentredBallGetsNoSidewaysKickButOffCentreIsRecentred` — eksen simetrisi çarpanını doğrular.
+13. `testDescendingBallStretchesTheHemOpen` — dar ağzın top tarafından gerildiğini, yani swish'in gerçekten oluştuğunu doğrular.
 
 ### Neden bu testler
 
