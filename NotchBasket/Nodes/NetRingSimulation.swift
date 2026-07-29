@@ -88,6 +88,13 @@ final class NetRingSimulation {
         rings[index].radius += amount
     }
 
+    /// Test seam: swings one loop sideways the way a ball entering off-centre
+    /// would, without needing a ball.
+    func swayRingForTesting(at index: Int, by amount: CGFloat) {
+        guard rings.indices.contains(index), !rings[index].isPinned else { return }
+        rings[index].centerX += amount
+    }
+
     func step(deltaTime: CGFloat) {
         let time = min(max(deltaTime, 0), 1.0 / 30.0)
         guard time > 0 else { return }

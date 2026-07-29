@@ -187,4 +187,44 @@ final class NetSimulationTests: XCTestCase {
             "the disturbance must reach ring 3 before ring 7"
         )
     }
+
+    func testSwayPropagatesDownTheSkirt() {
+        let simulation = NetRingSimulation()
+        XCTAssertEqual(simulation.rings[4].centerX, 0)
+
+        simulation.swayRingForTesting(at: 3, by: 15)
+
+        for _ in 0..<10 {
+            simulation.step(deltaTime: 1.0 / 60.0)
+        }
+
+        XCTAssertGreaterThan(
+            simulation.rings[4].centerX,
+            0,
+            "the ring below the swayed ring should be dragged toward the same side"
+        )
+    }
+
+    func testWideningOneRingPullsBackOnTheRingAbove() {
+        // Every free ring drifts slightly away from its rest state purely from
+        // gravity settling, even with no coupling at all, so a plain "did it
+        // move" check would pass whether or not the reciprocal reaction exists.
+        // The reaction's signature is specific: it drags ring 4's radius
+        // measurably *below* its rest radius, something gravity alone never
+        // does (gravity only acts on sag, not radius).
+        let simulation = NetRingSimulation()
+        let restRadius = simulation.rings[4].restRadius
+
+        simulation.widenRingForTesting(at: 5, by: 22)
+
+        for _ in 0..<12 {
+            simulation.step(deltaTime: 1.0 / 60.0)
+        }
+
+        XCTAssertLessThan(
+            simulation.rings[4].radius,
+            restRadius,
+            "widening the ring below must react back onto the ring above it"
+        )
+    }
 }
