@@ -693,10 +693,30 @@ Add to `NetSimulationTests.swift`:
 
         simulation.step(deltaTime: 1.0 / 60.0, contact: contact, responseScale: 1)
 
+        // The ball is already gone. What it left behind is velocity, so the net
+        // visibly moves over the frames that follow — measuring position at the
+        // instant of crossing would sample before any of it has happened.
+        for _ in 0..<6 {
+            simulation.step(deltaTime: 1.0 / 60.0, contact: nil, responseScale: 1)
+        }
+
         XCTAssertGreaterThan(
             simulation.displacementFromRest(),
             1,
             "a ball crossing the whole net in one frame must still disturb it"
+        )
+
+        // The displacement alone does not gate the sweep resolution — with and
+        // without refinement it clears the threshold. Whether the ball is caught
+        // against more than one loop does: unrefined, only ring 10 registers
+        // (ring 9 deviates 0.0411); refined, ring 9 deviates 0.1567.
+        let disturbedRings = simulation.rings.filter {
+            abs($0.radius - $0.restRadius) > 0.05
+        }
+        XCTAssertGreaterThanOrEqual(
+            disturbedRings.count,
+            2,
+            "the swept substeps must catch the ball against more than one loop"
         )
     }
 
