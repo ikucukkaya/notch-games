@@ -812,6 +812,15 @@ Add these constants to `NetRingSimulation`:
     private let contactStiffness: CGFloat = 600
     private let contactSwayShare: CGFloat = 0.45
 
+    /// A stiff contact spring with no dashpot overshoots by construction, and at
+    /// this stiffness the overshoot was large enough to invert ring order — the
+    /// ordering clamp was catching it in ~8.5% of substeps under hard contact
+    /// instead of sitting idle as a backstop. Critical damping for k = 600 on a
+    /// unit ring mass is about 49; staying under that keeps the net springy while
+    /// removing the overshoot. Damping vanishes at steady state, so the hem still
+    /// settles where the equilibrium says it should.
+    private let contactDamping: CGFloat = 30
+
     /// A fast shot crosses the whole net inside one display frame. Sampling by
     /// elapsed time alone would step the ball straight over the cords, so the
     /// sweep is refined until each substep advances it only a few points — well
@@ -881,7 +890,7 @@ Add the contact geometry and its effect on the rings:
     /// Distance from the ball's centre to the nearest point on a cord loop.
     /// One formula, so a ball inside the net, outside it, above it, or below it
     /// all take the same path — scoring is never a condition.
-    func touches(for contact: NetRingContact) -> [NetRingTouch] {
+    private func touches(for contact: NetRingContact) -> [NetRingTouch] {
         guard contact.radius > 0 else { return [] }
         var result: [NetRingTouch] = []
         for index in rings.indices where !rings[index].isPinned {
@@ -922,6 +931,18 @@ Add the contact geometry and its effect on the rings:
             rings[touch.ringIndex].centerXVelocity -=
                 impulse * contactSwayShare
                 * touch.radialNormal * touch.lateralSign * touch.axialFraction
+
+            // Oppose the ring's velocity along the push direction. Without this
+            // the ordering clamp becomes the primary stabiliser rather than a
+            // backstop.
+            let pushRadius = -touch.radialNormal
+            let pushVertical = -touch.verticalNormal
+            let normalVelocity =
+                (rings[touch.ringIndex].radiusVelocity * pushRadius)
+                + (rings[touch.ringIndex].centerYVelocity * pushVertical)
+            let damping = contactDamping * normalVelocity * responseScale * deltaTime
+            rings[touch.ringIndex].radiusVelocity -= damping * pushRadius
+            rings[touch.ringIndex].centerYVelocity -= damping * pushVertical
         }
     }
 ```
@@ -1861,6 +1882,7 @@ Secondary dials, in the order worth touching:
 | Constant | Raise it to… | Lower it to… |
 |---|---|---|
 | `contactStiffness` (600) | open the net wider around the ball | let the net hug the ball tighter |
+| `contactDamping` (30) | kill contact overshoot, calmer net | more rebound; past ~49 the ordering clamp starts doing the stabilising |
 | `ballContactStiffness` (90) | make the net springier, ball pops out | let the ball sink deeper |
 | `contactDrag` (0.6) | swallow more speed, heavier net | keep the ball lively |
 | `cordStiffness` (340) | sharper snap-back and faster wave | looser, older-looking net |
