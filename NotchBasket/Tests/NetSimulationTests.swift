@@ -399,4 +399,222 @@ final class NetSimulationTests: XCTestCase {
 
         XCTAssertLessThan(reduced.displacementFromRest(), full.displacementFromRest())
     }
+    // MARK: - Task 4: net pushes back on the ball
+
+    func testNetDeceleratesDescendingBall() {
+        let simulation = NetRingSimulation()
+        let force = simulation.step(
+            deltaTime: 1.0 / 60.0,
+            contact: descendingContact(y: -64),
+            responseScale: 1
+        )
+
+        XCTAssertGreaterThan(
+            force.dy,
+            0,
+            "a ball falling into the cone must be pushed back upward"
+        )
+    }
+
+    func testCentredBallGetsNoSidewaysKickButOffCentreIsRecentred() {
+        let centred = NetRingSimulation()
+        let offCentre = NetRingSimulation()
+
+        let centredForce = centred.step(
+            deltaTime: 1.0 / 60.0,
+            contact: descendingContact(y: -64, x: 0),
+            responseScale: 1
+        )
+        let offCentreForce = offCentre.step(
+            deltaTime: 1.0 / 60.0,
+            contact: descendingContact(y: -64, x: 12),
+            responseScale: 1
+        )
+
+        XCTAssertEqual(
+            centredForce.dx,
+            0,
+            accuracy: 0.001,
+            "a ball on the axis is squeezed equally from every side"
+        )
+        XCTAssertLessThan(
+            offCentreForce.dx,
+            -0.001,
+            "a ball off the axis must be pushed back toward it"
+        )
+    }
+
+    func testContactAppliesRegardlessOfScoring() {
+        let fromBelow = NetRingSimulation()
+        let bottomIndex = NetRingSimulation.ringCount - 1
+        let belowForce = fromBelow.step(
+            deltaTime: 1.0 / 60.0,
+            contact: NetRingContact(
+                position: CGPoint(
+                    x: 0,
+                    y: fromBelow.rings[bottomIndex].restCenterY - 8
+                ),
+                velocity: CGVector(dx: 0, dy: 520),
+                radius: GameTuning.ballDiameter / 2
+            ),
+            responseScale: 1
+        )
+
+        let fromSide = NetRingSimulation()
+        let sideForce = fromSide.step(
+            deltaTime: 1.0 / 60.0,
+            contact: NetRingContact(
+                position: CGPoint(x: NetRingSimulation.topHalfWidth, y: -30),
+                velocity: CGVector(dx: -300, dy: -60),
+                radius: GameTuning.ballDiameter / 2
+            ),
+            responseScale: 1
+        )
+
+        XCTAssertLessThan(belowForce.dy, 0, "the hem must resist a ball rising into it")
+        XCTAssertGreaterThan(sideForce.dx, 0, "a side brush must push the ball outward")
+    }
+
+    func testBallForceIsCapped() {
+        let simulation = NetRingSimulation()
+        let force = simulation.step(
+            deltaTime: 1.0 / 60.0,
+            contact: NetRingContact(
+                position: CGPoint(x: 0, y: -64),
+                velocity: CGVector(dx: 0, dy: -6_000),
+                radius: GameTuning.ballDiameter / 2
+            ),
+            responseScale: 1
+        )
+
+        XCTAssertGreaterThan(
+            hypot(force.dx, force.dy),
+            0,
+            "the contact must actually register, or the cap is untested"
+        )
+        XCTAssertLessThanOrEqual(hypot(force.dx, force.dy), 90.001)
+    }
+
+    func testGripGrowsWithPenetration() {
+        let shallow = NetRingSimulation.grip(penetration: 4, ballRadius: 24)
+        let deep = NetRingSimulation.grip(penetration: 20, ballRadius: 24)
+
+        XCTAssertGreaterThan(deep.normal, shallow.normal)
+        XCTAssertGreaterThanOrEqual(shallow.normal, 0)
+        XCTAssertGreaterThanOrEqual(shallow.drag, 0)
+    }
+
+    // MARK: - Task 5: containment backstop
+
+    func testBallInsideTheNetIsNotCorrected() {
+        let simulation = NetRingSimulation()
+
+        XCTAssertNil(simulation.containmentCorrection(
+            ballPosition: CGPoint(x: 0, y: -30),
+            ballRadius: GameTuning.ballDiameter / 2
+        ))
+    }
+
+    func testBallThatSlippedThroughTheSideIsNudgedBack() throws {
+        let simulation = NetRingSimulation()
+        let escaped = CGPoint(x: NetRingSimulation.topHalfWidth + 30, y: -30)
+
+        let correction = try XCTUnwrap(simulation.containmentCorrection(
+            ballPosition: escaped,
+            ballRadius: GameTuning.ballDiameter / 2
+        ))
+
+        XCTAssertLessThan(correction.x, escaped.x)
+        XCTAssertEqual(correction.y, escaped.y, "the backstop is lateral only")
+        XCTAssertLessThanOrEqual(
+            escaped.x - correction.x,
+            NetRingSimulation.maximumCorrectionPerFrame + 0.001
+        )
+    }
+
+    func testBallBelowTheNetIsReleased() {
+        let simulation = NetRingSimulation()
+        let bottom = simulation.rings[NetRingSimulation.ringCount - 1].restCenterY
+        let ballRadius = GameTuning.ballDiameter / 2
+
+        XCTAssertNil(simulation.containmentCorrection(
+            ballPosition: CGPoint(x: 40, y: bottom - ballRadius - 6),
+            ballRadius: ballRadius
+        ))
+    }
+
+    func testBallAboveTheRimIsNotCorrected() {
+        let simulation = NetRingSimulation()
+
+        XCTAssertNil(simulation.containmentCorrection(
+            ballPosition: CGPoint(x: NetRingSimulation.topHalfWidth + 30, y: 40),
+            ballRadius: GameTuning.ballDiameter / 2
+        ))
+    }
+
+    // MARK: - Task 6: woven mesh derived from the rings
+
+    func testKnotsProjectOntoTheRimEllipse() {
+        let simulation = NetRingSimulation()
+        let topRing = simulation.rings[0]
+
+        let front = NetMeshPathBuilder.knot(
+            ring: topRing,
+            cordIndex: 0,
+            ringFraction: 0
+        )
+        let quarter = NetMeshPathBuilder.knot(
+            ring: topRing,
+            cordIndex: NetMeshPathBuilder.cordCount / 4,
+            ringFraction: 0
+        )
+
+        XCTAssertEqual(front.point.x, topRing.radius, accuracy: 0.001)
+        XCTAssertEqual(
+            abs(quarter.point.y - topRing.centerY),
+            topRing.radius * NetMeshPathBuilder.projectionRatio,
+            accuracy: 0.5,
+            "the quarter-turn knot must sit on the shallow rim ellipse"
+        )
+    }
+
+    func testEveryCordIsAssignedToExactlyOneDepthLayer() {
+        let simulation = NetRingSimulation()
+        var frontCount = 0
+        var rearCount = 0
+
+        for cordIndex in 0..<NetMeshPathBuilder.cordCount {
+            let knot = NetMeshPathBuilder.knot(
+                ring: simulation.rings[3],
+                cordIndex: cordIndex,
+                ringFraction: 0.3
+            )
+            if knot.depth >= 0 {
+                rearCount += 1
+            } else {
+                frontCount += 1
+            }
+        }
+
+        XCTAssertGreaterThan(frontCount, 0)
+        XCTAssertGreaterThan(rearCount, 0)
+        XCTAssertEqual(frontCount + rearCount, NetMeshPathBuilder.cordCount)
+    }
+
+    func testMeshPathsAreNonEmptyAndTrackRingMotion() {
+        let simulation = NetRingSimulation()
+        let atRest = NetMeshPathBuilder.paths(for: simulation.rings)
+        XCTAssertFalse(atRest.rear.isEmpty)
+        XCTAssertFalse(atRest.front.isEmpty)
+
+        simulation.widenRingForTesting(at: 5, by: 24)
+        let deformed = NetMeshPathBuilder.paths(for: simulation.rings)
+
+        XCTAssertNotEqual(
+            atRest.front.boundingBox.width,
+            deformed.front.boundingBox.width,
+            accuracy: 0.0001
+        )
+    }
+
 }

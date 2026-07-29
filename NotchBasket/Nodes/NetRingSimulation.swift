@@ -45,6 +45,14 @@ struct NetRingTouch {
     let axialFraction: CGFloat
 }
 
+/// How firmly the net holds the ball at one contact point.
+struct NetGrip {
+    /// Scales the outward spring that pushes the ball off the cord.
+    let normal: CGFloat
+    /// Scales the drag that bleeds off the ball's speed along the cord.
+    let drag: CGFloat
+}
+
 /// The net, modelled as a stack of cord loops. Rendering and ball contact both
 /// read this one model, so the net can never look like it is doing something
 /// different from what the ball feels.
@@ -100,6 +108,17 @@ final class NetRingSimulation {
     private let maximumBallTravelPerSubstep: CGFloat = 4
     private let maximumSubstepCount = 64
 
+    // The ring push and the ball reaction are different physical quantities and
+    // must not share a constant. `contactStiffness` is an acceleration per unit
+    // of penetration applied to a ring; this one is a force in the units
+    // SKPhysicsBody.applyForce expects, acting on a 0.34 kg ball whose weight is
+    // only about 3.5. At 90 a deep contact brakes the ball hard without hurling
+    // it back out, and the cap is reached only at full penetration — so the grip
+    // curve below still shapes everything the player feels.
+    private let ballContactStiffness: CGFloat = 90
+    private let maximumBallForce: CGFloat = 90
+    private let contactDrag: CGFloat = 0.6
+
     init() {
         buildRings()
     }
@@ -145,13 +164,15 @@ final class NetRingSimulation {
         step(deltaTime: deltaTime, contact: nil, responseScale: 1)
     }
 
+    /// Advances the net and returns the force the cords are exerting on the ball.
+    @discardableResult
     func step(
         deltaTime: CGFloat,
         contact: NetRingContact?,
         responseScale: CGFloat
-    ) {
+    ) -> CGVector {
         let time = min(max(deltaTime, 0), 1.0 / 30.0)
-        guard time > 0 else { return }
+        guard time > 0 else { return .zero }
         let scale = min(max(responseScale, 0), 1)
         var substepCount = max(1, Int(ceil(time / substepDuration)))
         if let contact {
@@ -170,6 +191,7 @@ final class NetRingSimulation {
             )
         }
 
+        var accumulated = CGVector.zero
         for substepIndex in 0..<substepCount {
             var swept = contact
             if let contact, let startPosition {
@@ -188,8 +210,111 @@ final class NetRingSimulation {
             integrate(deltaTime: substep)
             if let swept, swept.radius > 0, scale > 0 {
                 applyContact(swept, deltaTime: substep, responseScale: scale)
+                let force = ballForce(for: swept, responseScale: scale)
+                accumulated.dx += force.dx / CGFloat(substepCount)
+                accumulated.dy += force.dy / CGFloat(substepCount)
             }
         }
+
+        let magnitude = hypot(accumulated.dx, accumulated.dy)
+        guard magnitude > maximumBallForce else { return accumulated }
+        let limitScale = maximumBallForce / magnitude
+        return CGVector(
+            dx: accumulated.dx * limitScale,
+            dy: accumulated.dy * limitScale
+        )
+    }
+
+    /// Equal and opposite to what `applyContact` does to the cords. Because the
+    /// loops narrow with depth, the outward normals of a stack of them add up to
+    /// an upward resultant, so the cone brakes a descending ball without any
+    /// special-cased damping.
+    private func ballForce(
+        for contact: NetRingContact,
+        responseScale: CGFloat
+    ) -> CGVector {
+        var force = CGVector.zero
+        for touch in touches(for: contact) {
+            let grip = Self.grip(
+                penetration: touch.penetration,
+                ballRadius: contact.radius
+            )
+            let push = ballContactStiffness * grip.normal * responseScale
+            let normalX = touch.radialNormal * touch.lateralSign
+                * touch.axialFraction
+            force.dx += push * normalX
+            force.dy += push * touch.verticalNormal
+
+            let drag = contactDrag * grip.drag * responseScale
+            force.dx -= contact.velocity.dx * drag
+            force.dy -= contact.velocity.dy * drag
+        }
+        return force
+    }
+
+    // TODO(owner): this is the game-feel dial for the net, deliberately left
+    // for the project owner the same way ShotController.powerCurve was.
+    //
+    // `penetration` is how far the ball's surface has passed a cord, in points,
+    // from 0 up to roughly `ballRadius` (24). The return values scale the
+    // outward push and the speed-bleeding drag at that contact point.
+    //
+    // Linear is the honest starting point, but it is probably not the most
+    // satisfying one. Things worth trying:
+    //   - a progressive curve (pow(t, 1.5)) so light brushes barely register
+    //     but a deep entry grabs hard — makes a clean swish feel free and a
+    //     rattled shot feel heavy
+    //   - more `drag` than `normal` so the net swallows speed instead of
+    //     bouncing the ball, which reads as a heavier, older net
+    //   - clamping `normal` while letting `drag` keep rising, so the ball is
+    //     slowed but never spat back out
+    // Too much and the ball hangs in the net; too little and a swish feels
+    // weightless. Only playing it will tell you which.
+    static func grip(penetration: CGFloat, ballRadius: CGFloat) -> NetGrip {
+        guard ballRadius > 0 else { return NetGrip(normal: 0, drag: 0) }
+        let depth = min(max(penetration / ballRadius, 0), 1)
+        return NetGrip(normal: depth, drag: depth)
+    }
+
+    /// The most the backstop may move the ball in one frame. Small enough that
+    /// a player can never see it, large enough to recover from a tunnelling
+    /// event over a few frames.
+    static let maximumCorrectionPerFrame: CGFloat = 2
+
+    /// Returns a nudged position only when the ball has ended up outside the
+    /// cone while still within its vertical span — that is, when the integrator
+    /// let it through a cord. Returns nil in every normal case, including a ball
+    /// that has legitimately cleared the hem.
+    func containmentCorrection(
+        ballPosition: CGPoint,
+        ballRadius: CGFloat
+    ) -> CGPoint? {
+        guard ballRadius > 0 else { return nil }
+        guard let top = rings.first, let bottom = rings.last else { return nil }
+        guard ballPosition.y <= top.centerY,
+              ballPosition.y >= bottom.centerY else { return nil }
+
+        let fraction = (top.centerY - ballPosition.y)
+            / max(top.centerY - bottom.centerY, 0.001)
+        let index = min(
+            max(Int((fraction * CGFloat(rings.count - 1)).rounded()), 0),
+            rings.count - 1
+        )
+        let ring = rings[index]
+
+        let lateralOffset = ballPosition.x - ring.centerX
+        let limit = ring.radius - (ballRadius * 0.25)
+        guard abs(lateralOffset) > limit else { return nil }
+
+        let target = ring.centerX + (limit * (lateralOffset >= 0 ? 1 : -1))
+        let step = min(
+            abs(ballPosition.x - target),
+            Self.maximumCorrectionPerFrame
+        )
+        return CGPoint(
+            x: ballPosition.x + (step * (target > ballPosition.x ? 1 : -1)),
+            y: ballPosition.y
+        )
     }
 
     /// Distance from the ball's centre to the nearest point on a cord loop.
@@ -366,5 +491,117 @@ final class NetRingSimulation {
                 rings[index].radiusVelocity = max(rings[index].radiusVelocity, 0)
             }
         }
+    }
+}
+
+/// Turns ring state into the two stroked paths the net is drawn with. Cords are
+/// split by their projected depth, so the ones that end up in front of the ball
+/// are the ones genuinely nearer the viewer.
+enum NetMeshPathBuilder {
+    static let cordCount = 10
+
+    /// How flat the loops look from the side. Derived from the rim so the net
+    /// and the rim can never disagree about the viewing angle.
+    static let projectionRatio: CGFloat =
+        (SideHoopLayout.rimDepth / 2) / NetRingSimulation.topHalfWidth
+
+    /// Real nets are hung with a slight spiral; without it the weave reads as a
+    /// flat grid.
+    static let twistPerRing: CGFloat = 0.12
+
+    static func knot(
+        ring: NetRing,
+        cordIndex: Int,
+        ringFraction: CGFloat
+    ) -> (point: CGPoint, depth: CGFloat) {
+        let angle = ((2 * CGFloat.pi) * CGFloat(cordIndex) / CGFloat(cordCount))
+            + (ringFraction * twistPerRing)
+        let point = CGPoint(
+            x: ring.centerX + (ring.radius * cos(angle)),
+            y: ring.centerY + (projectionRatio * ring.radius * sin(angle))
+        )
+        return (point, sin(angle))
+    }
+
+    static func paths(for rings: [NetRing]) -> (rear: CGPath, front: CGPath) {
+        let rear = CGMutablePath()
+        let front = CGMutablePath()
+        guard rings.count > 1 else { return (rear, front) }
+
+        let lastIndex = rings.count - 1
+        func fraction(_ index: Int) -> CGFloat {
+            CGFloat(index) / CGFloat(lastIndex)
+        }
+
+        // The attachment cord around the rim.
+        for cordIndex in 0...cordCount {
+            let knot = knot(
+                ring: rings[0],
+                cordIndex: cordIndex % cordCount,
+                ringFraction: 0
+            )
+            if cordIndex == 0 {
+                rear.move(to: knot.point)
+            } else {
+                rear.addLine(to: knot.point)
+            }
+        }
+
+        // The two diagonal cord families that make the diamond weave.
+        for index in 0..<lastIndex {
+            for cordIndex in 0..<cordCount {
+                let upper = knot(
+                    ring: rings[index],
+                    cordIndex: cordIndex,
+                    ringFraction: fraction(index)
+                )
+                let lowerRight = knot(
+                    ring: rings[index + 1],
+                    cordIndex: (cordIndex + 1) % cordCount,
+                    ringFraction: fraction(index + 1)
+                )
+                let lowerLeft = knot(
+                    ring: rings[index + 1],
+                    cordIndex: (cordIndex + cordCount - 1) % cordCount,
+                    ringFraction: fraction(index + 1)
+                )
+
+                appendCord(from: upper, to: lowerRight, rear: rear, front: front)
+                appendCord(from: upper, to: lowerLeft, rear: rear, front: front)
+            }
+        }
+
+        // A loose scallop along the hem so the bottom does not read as a hoop.
+        let hem = rings[lastIndex]
+        for cordIndex in 0..<cordCount {
+            let left = knot(ring: hem, cordIndex: cordIndex, ringFraction: 1)
+            let right = knot(
+                ring: hem,
+                cordIndex: (cordIndex + 1) % cordCount,
+                ringFraction: 1
+            )
+            let target = left.depth + right.depth >= 0 ? rear : front
+            target.move(to: left.point)
+            target.addQuadCurve(
+                to: right.point,
+                control: CGPoint(
+                    x: (left.point.x + right.point.x) / 2,
+                    y: min(left.point.y, right.point.y) - 4
+                )
+            )
+        }
+
+        return (rear, front)
+    }
+
+    private static func appendCord(
+        from start: (point: CGPoint, depth: CGFloat),
+        to end: (point: CGPoint, depth: CGFloat),
+        rear: CGMutablePath,
+        front: CGMutablePath
+    ) {
+        let target = start.depth + end.depth >= 0 ? rear : front
+        target.move(to: start.point)
+        target.addLine(to: end.point)
     }
 }
