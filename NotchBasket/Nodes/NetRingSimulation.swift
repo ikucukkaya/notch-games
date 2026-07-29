@@ -20,6 +20,31 @@ struct NetRing {
     let isPinned: Bool
 }
 
+/// The ball as the net sees it, expressed in the net's own coordinate space.
+struct NetRingContact {
+    let position: CGPoint
+    let velocity: CGVector
+    let radius: CGFloat
+}
+
+/// Where a ball touches one cord loop, and how deeply.
+struct NetRingTouch {
+    let ringIndex: Int
+    /// How far the ball's surface has passed the cord.
+    let penetration: CGFloat
+    /// Unit normal in (radial, vertical) space, pointing from cord to ball.
+    let radialNormal: CGFloat
+    let verticalNormal: CGFloat
+    /// +1 when the ball is on the +x side of the loop's axis, −1 otherwise.
+    let lateralSign: CGFloat
+    /// How far off the loop's axis the ball is, 0 (dead centre) to 1 (at the
+    /// cord). Scales every lateral term: a ball on the axis is pushed by the
+    /// whole loop equally from all sides, so its sideways components cancel and
+    /// only the vertical one survives. Without this the radial direction is
+    /// undefined at the axis and a perfectly centred swish gets kicked sideways.
+    let axialFraction: CGFloat
+}
+
 /// The net, modelled as a stack of cord loops. Rendering and ball contact both
 /// read this one model, so the net can never look like it is doing something
 /// different from what the ball feels.
@@ -53,6 +78,16 @@ final class NetRingSimulation {
     private var cordRestLengths: [CGFloat] = []
 
     private let substepDuration: CGFloat = 1.0 / 240.0
+
+    private let contactStiffness: CGFloat = 600
+    private let contactSwayShare: CGFloat = 0.45
+
+    /// A fast shot crosses the whole net inside one display frame. Sampling by
+    /// elapsed time alone would step the ball straight over the cords, so the
+    /// sweep is refined until each substep advances it only a few points —
+    /// well under a ring's spacing.
+    private let maximumBallTravelPerSubstep: CGFloat = 4
+    private let maximumSubstepCount = 64
 
     init() {
         buildRings()
@@ -96,12 +131,100 @@ final class NetRingSimulation {
     }
 
     func step(deltaTime: CGFloat) {
+        step(deltaTime: deltaTime, contact: nil, responseScale: 1)
+    }
+
+    func step(
+        deltaTime: CGFloat,
+        contact: NetRingContact?,
+        responseScale: CGFloat
+    ) {
         let time = min(max(deltaTime, 0), 1.0 / 30.0)
         guard time > 0 else { return }
-        let substepCount = max(1, Int(ceil(time / substepDuration)))
+        let scale = min(max(responseScale, 0), 1)
+        var substepCount = max(1, Int(ceil(time / substepDuration)))
+        if let contact {
+            let travel = hypot(contact.velocity.dx, contact.velocity.dy) * time
+            substepCount = max(substepCount, Int(ceil(travel / maximumBallTravelPerSubstep)))
+        }
+        substepCount = min(substepCount, maximumSubstepCount)
         let substep = time / CGFloat(substepCount)
-        for _ in 0..<substepCount {
+
+        // Sweep the ball along its path across the substeps so a fast shot
+        // cannot skip over the cords between two display frames.
+        let startPosition = contact.map {
+            CGPoint(
+                x: $0.position.x - ($0.velocity.dx * time),
+                y: $0.position.y - ($0.velocity.dy * time)
+            )
+        }
+
+        for substepIndex in 0..<substepCount {
+            var swept = contact
+            if let contact, let startPosition {
+                let progress = CGFloat(substepIndex + 1) / CGFloat(substepCount)
+                swept = NetRingContact(
+                    position: CGPoint(
+                        x: startPosition.x
+                            + ((contact.position.x - startPosition.x) * progress),
+                        y: startPosition.y
+                            + ((contact.position.y - startPosition.y) * progress)
+                    ),
+                    velocity: contact.velocity,
+                    radius: contact.radius
+                )
+            }
             integrate(deltaTime: substep)
+            if let swept, swept.radius > 0, scale > 0 {
+                applyContact(swept, deltaTime: substep, responseScale: scale)
+            }
+        }
+    }
+
+    /// Distance from the ball's centre to the nearest point on a cord loop.
+    /// One formula, so a ball inside the net, outside it, above it, or below it
+    /// all take the same path — scoring is never a condition.
+    func touches(for contact: NetRingContact) -> [NetRingTouch] {
+        guard contact.radius > 0 else { return [] }
+        var result: [NetRingTouch] = []
+        for index in rings.indices where !rings[index].isPinned {
+            let ring = rings[index]
+            let lateralOffset = contact.position.x - ring.centerX
+            let axialDistance = abs(lateralOffset)
+            let radial = axialDistance - ring.radius
+            let vertical = contact.position.y - ring.centerY
+            let distance = hypot(radial, vertical)
+            let penetration = contact.radius - distance
+            guard penetration > 0 else { continue }
+
+            let safeDistance = max(distance, 0.001)
+            result.append(NetRingTouch(
+                ringIndex: index,
+                penetration: penetration,
+                radialNormal: radial / safeDistance,
+                verticalNormal: vertical / safeDistance,
+                lateralSign: lateralOffset >= 0 ? 1 : -1,
+                axialFraction: min(axialDistance / max(ring.radius, 0.001), 1)
+            ))
+        }
+        return result
+    }
+
+    private func applyContact(
+        _ contact: NetRingContact,
+        deltaTime: CGFloat,
+        responseScale: CGFloat
+    ) {
+        for touch in touches(for: contact) {
+            let impulse = contactStiffness * touch.penetration
+                * responseScale * deltaTime
+            // The cord is pushed the opposite way from the ball's normal, so a
+            // ball inside the cone opens the loop and a ball outside squeezes it.
+            rings[touch.ringIndex].radiusVelocity -= impulse * touch.radialNormal
+            rings[touch.ringIndex].centerYVelocity -= impulse * touch.verticalNormal
+            rings[touch.ringIndex].centerXVelocity -=
+                impulse * contactSwayShare
+                * touch.radialNormal * touch.lateralSign * touch.axialFraction
         }
     }
 

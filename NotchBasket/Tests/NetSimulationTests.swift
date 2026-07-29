@@ -227,4 +227,147 @@ final class NetSimulationTests: XCTestCase {
             "widening the ring below must react back onto the ring above it"
         )
     }
+
+    private func descendingContact(y: CGFloat, x: CGFloat = 0) -> NetRingContact {
+        NetRingContact(
+            position: CGPoint(x: x, y: y),
+            velocity: CGVector(dx: 0, dy: -600),
+            radius: GameTuning.ballDiameter / 2
+        )
+    }
+
+    func testDescendingBallStretchesTheHemOpen() {
+        let simulation = NetRingSimulation()
+        let bottomIndex = NetRingSimulation.ringCount - 1
+        let restRadius = simulation.rings[bottomIndex].restRadius
+
+        for _ in 0..<6 {
+            simulation.step(
+                deltaTime: 1.0 / 60.0,
+                contact: descendingContact(
+                    y: simulation.rings[bottomIndex].restCenterY
+                ),
+                responseScale: 1
+            )
+        }
+
+        XCTAssertGreaterThan(simulation.rings[bottomIndex].radius, restRadius + 0.5)
+    }
+
+    func testBallBelowTheHemPushesTheBottomRingUpward() {
+        // Gravity sags every ring slightly below its authored restCenterY
+        // regardless of contact, so comparing against restCenterY would be
+        // measuring gravity, not the ball. A control simulation stepped the
+        // same number of frames with no contact isolates the contact's effect.
+        let contacted = NetRingSimulation()
+        let control = NetRingSimulation()
+        let bottomIndex = NetRingSimulation.ringCount - 1
+        let restCenterY = contacted.rings[bottomIndex].restCenterY
+        let contact = NetRingContact(
+            position: CGPoint(x: 0, y: restCenterY - 8),
+            velocity: CGVector(dx: 0, dy: 520),
+            radius: GameTuning.ballDiameter / 2
+        )
+
+        for _ in 0..<6 {
+            contacted.step(deltaTime: 1.0 / 60.0, contact: contact, responseScale: 1)
+            control.step(deltaTime: 1.0 / 60.0, contact: nil, responseScale: 1)
+        }
+
+        XCTAssertGreaterThan(contacted.rings[bottomIndex].centerY, control.rings[bottomIndex].centerY)
+    }
+
+    func testBallBrushingOneSidePushesTheNetTheOtherWay() {
+        let simulation = NetRingSimulation()
+        let contact = NetRingContact(
+            position: CGPoint(x: NetRingSimulation.topHalfWidth, y: -30),
+            velocity: CGVector(dx: -240, dy: -120),
+            radius: GameTuning.ballDiameter / 2
+        )
+
+        for _ in 0..<8 {
+            simulation.step(deltaTime: 1.0 / 60.0, contact: contact, responseScale: 1)
+        }
+
+        XCTAssertLessThan(
+            simulation.rings[4].centerX,
+            -0.2,
+            "a ball outside the cone must push the cords away from it, not toward it"
+        )
+    }
+
+    func testFastBallDoesNotTunnelThroughNet() {
+        let simulation = NetRingSimulation()
+        // One 60 Hz frame carries the ball from the rim plane to below the hem,
+        // so only the swept substeps can see the contact at all.
+        let contact = NetRingContact(
+            position: CGPoint(x: 0, y: -110),
+            velocity: CGVector(dx: 0, dy: -6_600),
+            radius: GameTuning.ballDiameter / 2
+        )
+
+        simulation.step(deltaTime: 1.0 / 60.0, contact: contact, responseScale: 1)
+
+        // The ball is already gone. What it left behind is velocity, so the net
+        // visibly moves over the frames that follow — measuring position at the
+        // instant of crossing would sample before any of it has happened.
+        for _ in 0..<6 {
+            simulation.step(deltaTime: 1.0 / 60.0, contact: nil, responseScale: 1)
+        }
+
+        XCTAssertGreaterThan(
+            simulation.displacementFromRest(),
+            1,
+            "a ball crossing the whole net in one frame must still disturb it"
+        )
+
+        let disturbedRings = simulation.rings.filter {
+            abs($0.radius - $0.restRadius) > 0.05
+        }
+        XCTAssertGreaterThanOrEqual(
+            disturbedRings.count,
+            2,
+            "the swept substeps must catch the ball against more than one loop"
+        )
+    }
+
+    func testRingOrderSurvivesSevereContact() {
+        let simulation = NetRingSimulation()
+
+        for stepIndex in 0..<120 {
+            let sweepY = CGFloat(stepIndex)
+                .truncatingRemainder(dividingBy: 20) * -6
+            simulation.step(
+                deltaTime: 1.0 / 60.0,
+                contact: NetRingContact(
+                    position: CGPoint(x: sin(CGFloat(stepIndex)) * 40, y: sweepY),
+                    velocity: CGVector(dx: 900, dy: -1_400),
+                    radius: GameTuning.ballDiameter / 2
+                ),
+                responseScale: 1
+            )
+
+            for index in 1..<NetRingSimulation.ringCount {
+                XCTAssertLessThan(
+                    simulation.rings[index].centerY,
+                    simulation.rings[index - 1].centerY,
+                    "ring \(index) rose above ring \(index - 1) at step \(stepIndex)"
+                )
+                XCTAssertGreaterThan(simulation.rings[index].radius, 0)
+            }
+        }
+    }
+
+    func testReducedMotionScalesNetResponse() {
+        let full = NetRingSimulation()
+        let reduced = NetRingSimulation()
+        let contact = descendingContact(y: -64)
+
+        for _ in 0..<10 {
+            full.step(deltaTime: 1.0 / 60.0, contact: contact, responseScale: 1)
+            reduced.step(deltaTime: 1.0 / 60.0, contact: contact, responseScale: 0.38)
+        }
+
+        XCTAssertLessThan(reduced.displacementFromRest(), full.displacementFromRest())
+    }
 }
