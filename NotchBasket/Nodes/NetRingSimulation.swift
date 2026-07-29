@@ -82,6 +82,15 @@ final class NetRingSimulation {
     private let contactStiffness: CGFloat = 600
     private let contactSwayShare: CGFloat = 0.45
 
+    /// A stiff contact spring with no dashpot overshoots by construction, and at
+    /// this stiffness the overshoot was large enough to invert ring order — the
+    /// ordering clamp was catching it several times per stress run instead of
+    /// sitting idle as a backstop. Critical damping for k = 600 on a unit ring
+    /// mass is about 49; staying under that keeps the net springy while removing
+    /// the overshoot. Damping vanishes at steady state, so the hem still settles
+    /// where the equilibrium says it should.
+    private let contactDamping: CGFloat = 30
+
     /// A fast shot crosses the whole net inside one display frame. Sampling by
     /// elapsed time alone would step the ball straight over the cords, so the
     /// sweep is refined until each substep advances it only a few points —
@@ -184,7 +193,7 @@ final class NetRingSimulation {
     /// Distance from the ball's centre to the nearest point on a cord loop.
     /// One formula, so a ball inside the net, outside it, above it, or below it
     /// all take the same path — scoring is never a condition.
-    func touches(for contact: NetRingContact) -> [NetRingTouch] {
+    private func touches(for contact: NetRingContact) -> [NetRingTouch] {
         guard contact.radius > 0 else { return [] }
         var result: [NetRingTouch] = []
         for index in rings.indices where !rings[index].isPinned {
@@ -225,6 +234,18 @@ final class NetRingSimulation {
             rings[touch.ringIndex].centerXVelocity -=
                 impulse * contactSwayShare
                 * touch.radialNormal * touch.lateralSign * touch.axialFraction
+
+            // A pure spring overshoots by construction. Oppose the ring's
+            // velocity along the push direction so the contact behaves like a
+            // spring-damper instead of inverting ring order under a stiff push.
+            let pushRadius = -touch.radialNormal
+            let pushVertical = -touch.verticalNormal
+            let normalVelocity =
+                (rings[touch.ringIndex].radiusVelocity * pushRadius)
+                + (rings[touch.ringIndex].centerYVelocity * pushVertical)
+            let damping = contactDamping * normalVelocity * responseScale * deltaTime
+            rings[touch.ringIndex].radiusVelocity -= damping * pushRadius
+            rings[touch.ringIndex].centerYVelocity -= damping * pushVertical
         }
     }
 
