@@ -277,12 +277,11 @@ final class NetRingSimulation {
     static let topHalfWidth: CGFloat =
         GameTuning.rimPostOffset - GameTuning.rimPostRadius
 
-    /// Deliberately narrower than the ball's 24-point radius. The old cloth
-    /// model used 31, which is wider than the ball — a dead-centre shot could
-    /// fall the whole length of the net without touching a single cord, so the
-    /// net never billowed on a clean swish. A real net's hem is narrower than
-    /// the ball and has to be stretched open by it; that stretch is the swish.
-    static let bottomHalfWidth: CGFloat = 18
+    /// Narrower than the ball's 24-point radius, but only just — a regulation
+    /// hem is about 0.96 of a ball diameter. The old cloth model used 31, wider
+    /// than the ball, so a dead-centre shot could fall the whole length of the net
+    /// without touching a cord and the net never billowed on a clean swish.
+    static let bottomHalfWidth: CGFloat = 22
     static let depth: CGFloat = 76
 
     private(set) var rings: [NetRing] = []

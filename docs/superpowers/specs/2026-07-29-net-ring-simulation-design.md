@@ -58,7 +58,9 @@ File 11 halkadan oluşur (`ringCount = 11`, indeks 0–10). Her halkanın 3 serb
 
 `t = i / (ringCount − 1)`. `topHalfWidth = GameTuning.rimPostOffset − GameTuning.rimPostRadius`, `depth = 76` — ikisi de mevcut değerler.
 
-`bottomHalfWidth` **31'den 18'e düşürülür.** Eski kumaş modelindeki 31, topun 24 birimlik yarıçapından geniş: tam ortadan giren bir top filenin boyunca hiçbir ipe değmeden düşebiliyordu, yani temiz swish'te file hiç şişmiyordu. Gerçek filenin ağzı toptan dardır ve top tarafından gerilmek zorundadır — swish dediğimiz şey zaten o gerilmedir. Bu, "file çok sert / az oynuyor" şikâyetinin ölçülebilir kısmının doğrudan sebebi.
+`bottomHalfWidth` **31'den 22'ye düşürülür.** Eski kumaş modelindeki 31, topun 24 birimlik yarıçapından geniş: tam ortadan giren bir top filenin boyunca hiçbir ipe değmeden düşebiliyordu, yani temiz swish'te file hiç şişmiyordu. Gerçek filenin ağzı toptan dardır ve top tarafından gerilmek zorundadır — swish dediğimiz şey zaten o gerilmedir. Bu, "file çok sert / az oynuyor" şikâyetinin ölçülebilir kısmının doğrudan sebebi. 22, NBA oranını da tutturur: gerçek hem topun ~0.96'sı, 22 ile 0.92.
+
+Bunun bir sonucu var: her halka toptan geniş olduğu için **tam ortadan geçen top yalnızca hem'e değer**. Gerçek filede de böyledir, ama testlerin temas koordinatları bu dar pencereye (`hypot(22, y+76) < 24`, yani `y ∈ (−85.6, −66.4)`) göre seçilmek zorunda.
 
 Halka 0 çembere sabittir (pinned): üç DOF'u da dinlenme değerinde kilitli.
 

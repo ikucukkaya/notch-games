@@ -61,12 +61,13 @@ final class NetRingSimulation {
     static let topHalfWidth: CGFloat =
         GameTuning.rimPostOffset - GameTuning.rimPostRadius
 
-    /// Deliberately narrower than the ball's 24-point radius. The old cloth
-    /// model used 31, which is wider than the ball — a dead-centre shot could
-    /// fall the whole length of the net without touching a single cord, so the
-    /// net never billowed on a clean swish. A real net's hem is narrower than
-    /// the ball and has to be stretched open by it; that stretch is the swish.
-    static let bottomHalfWidth: CGFloat = 18
+    /// Narrower than the ball's 24-point radius, but only just — a regulation
+    /// hem is about 0.96 of a ball diameter, so the ball has to stretch it open
+    /// without the net strangling it. The old cloth model used 31, wider than the
+    /// ball, so a dead-centre shot could fall the whole length of the net without
+    /// touching a single cord and the net never billowed on a clean swish. 22
+    /// keeps the stretch that makes the swish while holding the real proportion.
+    static let bottomHalfWidth: CGFloat = 22
     static let depth: CGFloat = 76
 
     private(set) var rings: [NetRing] = []
@@ -105,6 +106,13 @@ final class NetRingSimulation {
     /// elapsed time alone would step the ball straight over the cords, so the
     /// sweep is refined until each substep advances it only a few points —
     /// well under a ring's spacing.
+    ///
+    /// Insurance rather than a hot path: at the game's own launch speeds, and
+    /// even at the 6600 pt/s the tunnelling test uses, this changes the result by
+    /// under 2%, because the four time-based substeps already land inside the
+    /// hem's contact window. It earns its keep only above that, where they would
+    /// straddle it. No test gates it for that reason — the swept interpolation
+    /// itself is what the tunnelling test protects.
     private let maximumBallTravelPerSubstep: CGFloat = 4
     private let maximumSubstepCount = 64
 
