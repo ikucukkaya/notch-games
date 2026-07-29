@@ -331,6 +331,35 @@ final class NetSimulationTests: XCTestCase {
         )
     }
 
+    func testContactDampingKeepsTheHemFromOvershooting() {
+        let simulation = NetRingSimulation()
+        let bottomIndex = NetRingSimulation.ringCount - 1
+        let contact = NetRingContact(
+            position: CGPoint(x: 0, y: simulation.rings[bottomIndex].restCenterY),
+            velocity: CGVector(dx: 0, dy: -600),
+            radius: GameTuning.ballDiameter / 2
+        )
+
+        // A dwelling contact drives the hem toward its stretched equilibrium.
+        // A pure spring would fly past it before dragging back; a spring-damper
+        // settles with only a small overshoot. 180 frames (3s) is comfortably
+        // past both the peak (reached within the first ~10 frames) and a full
+        // settle (steady within the first ~2s), confirmed against a Python
+        // reimplementation of this exact model.
+        var peakRadius = simulation.rings[bottomIndex].radius
+        for _ in 0..<180 {
+            simulation.step(deltaTime: 1.0 / 60.0, contact: contact, responseScale: 1)
+            peakRadius = max(peakRadius, simulation.rings[bottomIndex].radius)
+        }
+        let settledRadius = simulation.rings[bottomIndex].radius
+
+        XCTAssertLessThan(
+            peakRadius - settledRadius,
+            1.0,
+            "damping should keep the hem's overshoot well short of the ordering clamp"
+        )
+    }
+
     func testRingOrderSurvivesSevereContact() {
         let simulation = NetRingSimulation()
 

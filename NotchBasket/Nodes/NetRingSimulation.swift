@@ -86,9 +86,11 @@ final class NetRingSimulation {
     /// this stiffness the overshoot was large enough to invert ring order — the
     /// ordering clamp was catching it several times per stress run instead of
     /// sitting idle as a backstop. Critical damping for k = 600 on a unit ring
-    /// mass is about 49; staying under that keeps the net springy while removing
-    /// the overshoot. Damping vanishes at steady state, so the hem still settles
-    /// where the equilibrium says it should.
+    /// mass is about 49; staying under that keeps the net springy. At this value
+    /// the damping ratio is ~0.61 — still underdamped, so some overshoot remains,
+    /// but no longer enough to reach the ordering clamp's threshold. Damping
+    /// vanishes at steady state, so the hem still settles where the equilibrium
+    /// says it should.
     private let contactDamping: CGFloat = 30
 
     /// A fast shot crosses the whole net inside one display frame. Sampling by
@@ -238,6 +240,10 @@ final class NetRingSimulation {
             // A pure spring overshoots by construction. Oppose the ring's
             // velocity along the push direction so the contact behaves like a
             // spring-damper instead of inverting ring order under a stiff push.
+            // This reads radiusVelocity/centerYVelocity after the push above has
+            // already landed, so it damps this substep's fresh impulse too, not
+            // just velocity carried over from earlier substeps — the ordinary
+            // semi-implicit arrangement, and stable at the substep sizes in play.
             let pushRadius = -touch.radialNormal
             let pushVertical = -touch.verticalNormal
             let normalVelocity =
