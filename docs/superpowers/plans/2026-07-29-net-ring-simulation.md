@@ -637,19 +637,29 @@ Add to `NetSimulationTests.swift`:
 
     func testBallBelowTheHemPushesTheBottomRingUpward() {
         let simulation = NetRingSimulation()
+        let control = NetRingSimulation()
         let bottomIndex = NetRingSimulation.ringCount - 1
-        let restCenterY = simulation.rings[bottomIndex].restCenterY
         let contact = NetRingContact(
-            position: CGPoint(x: 0, y: restCenterY - 8),
+            position: CGPoint(
+                x: 0,
+                y: simulation.rings[bottomIndex].restCenterY - 8
+            ),
             velocity: CGVector(dx: 0, dy: 520),
             radius: GameTuning.ballDiameter / 2
         )
 
+        // Gravity sags every ring slightly below its authored rest position, so
+        // the control run — identical but untouched — is the only honest
+        // baseline for what the contact alone did.
         for _ in 0..<6 {
             simulation.step(deltaTime: 1.0 / 60.0, contact: contact, responseScale: 1)
+            control.step(deltaTime: 1.0 / 60.0, contact: nil, responseScale: 1)
         }
 
-        XCTAssertGreaterThan(simulation.rings[bottomIndex].centerY, restCenterY)
+        XCTAssertGreaterThan(
+            simulation.rings[bottomIndex].centerY,
+            control.rings[bottomIndex].centerY
+        )
     }
 
     func testBallBrushingOneSidePushesTheNetTheOtherWay() {
@@ -773,8 +783,21 @@ struct NetRingTouch {
 Add these constants to `NetRingSimulation`:
 
 ```swift
-    private let contactStiffness: CGFloat = 26
+    // Sized from the equilibrium a dwelling ball reaches: the contact push
+    // balances the ring's restoring spring at
+    //   contactStiffness * (ballRadius - r) == radiusStiffness * (r - restRadius)
+    // so k = 600 lets the hem settle at r ~= 22.2 against a ball of radius 24 —
+    // stretched most of the way open, which is what a real hem does. An order of
+    // magnitude lower and the net barely moves with a ball inside it.
+    private let contactStiffness: CGFloat = 600
     private let contactSwayShare: CGFloat = 0.45
+
+    /// A fast shot crosses the whole net inside one display frame. Sampling by
+    /// elapsed time alone would step the ball straight over the cords, so the
+    /// sweep is refined until each substep advances it only a few points — well
+    /// under a ring's spacing.
+    private let maximumBallTravelPerSubstep: CGFloat = 4
+    private let maximumSubstepCount = 64
 ```
 
 Replace `step(deltaTime:)` with:
@@ -792,7 +815,12 @@ Replace `step(deltaTime:)` with:
         let time = min(max(deltaTime, 0), 1.0 / 30.0)
         guard time > 0 else { return }
         let scale = min(max(responseScale, 0), 1)
-        let substepCount = max(1, Int(ceil(time / substepDuration)))
+        var substepCount = max(1, Int(ceil(time / substepDuration)))
+        if let contact {
+            let travel = hypot(contact.velocity.dx, contact.velocity.dy) * time
+            substepCount = max(substepCount, Int(ceil(travel / maximumBallTravelPerSubstep)))
+        }
+        substepCount = min(substepCount, maximumSubstepCount)
         let substep = time / CGFloat(substepCount)
 
         // Sweep the ball along its path across the substeps so a fast shot
@@ -1042,6 +1070,14 @@ struct NetGrip {
 Add to `NetRingSimulation`:
 
 ```swift
+    // The ring push and the ball reaction are different physical quantities and
+    // must not share a constant. `contactStiffness` is an acceleration per unit
+    // of penetration applied to a ring; this one is a force in the units
+    // SKPhysicsBody.applyForce expects, acting on a 0.34 kg ball whose weight is
+    // only about 3.5. At 90 a deep contact brakes the ball hard without hurling
+    // it back out, and the cap is reached only at full penetration — so the grip
+    // curve below still shapes everything the player feels.
+    private let ballContactStiffness: CGFloat = 90
     private let maximumBallForce: CGFloat = 90
     private let contactDrag: CGFloat = 0.6
 
@@ -1144,7 +1180,7 @@ And add the reaction itself:
                 penetration: touch.penetration,
                 ballRadius: contact.radius
             )
-            let push = contactStiffness * grip.normal * responseScale
+            let push = ballContactStiffness * grip.normal * responseScale
             let normalX = touch.radialNormal * touch.lateralSign
                 * touch.axialFraction
             force.dx += push * normalX
@@ -1804,7 +1840,8 @@ Secondary dials, in the order worth touching:
 
 | Constant | Raise it to… | Lower it to… |
 |---|---|---|
-| `contactStiffness` (26) | make the net springier, ball pops out | let the ball sink deeper |
+| `contactStiffness` (600) | open the net wider around the ball | let the net hug the ball tighter |
+| `ballContactStiffness` (90) | make the net springier, ball pops out | let the ball sink deeper |
 | `contactDrag` (0.6) | swallow more speed, heavier net | keep the ball lively |
 | `cordStiffness` (340) | sharper snap-back and faster wave | looser, older-looking net |
 | `sagDamping` / `radiusDamping` (7 / 9) | settle sooner | let the net ring longer after a shot |
