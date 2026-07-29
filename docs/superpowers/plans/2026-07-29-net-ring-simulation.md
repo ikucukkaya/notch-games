@@ -947,13 +947,38 @@ Add the contact geometry and its effect on the rings:
     }
 ```
 
+Add one more test covering the dashpot. Without it, `contactDamping` could be
+set to 0 and every other test would still pass — the ordering clamp would take
+over the stabilising silently.
+
+```swift
+    func testContactDampingKeepsTheHemFromOvershooting() {
+        let simulation = NetRingSimulation()
+        let bottomIndex = NetRingSimulation.ringCount - 1
+        let contact = descendingContact(
+            y: simulation.rings[bottomIndex].restCenterY
+        )
+
+        var peak = simulation.rings[bottomIndex].radius
+        for _ in 0..<180 {
+            simulation.step(deltaTime: 1.0 / 60.0, contact: contact, responseScale: 1)
+            peak = max(peak, simulation.rings[bottomIndex].radius)
+        }
+        let settled = simulation.rings[bottomIndex].radius
+
+        // Damped the hem peaks 0.164 above where it settles; undamped it peaks
+        // 2.365 above. The threshold sits between those two measurements.
+        XCTAssertLessThan(peak - settled, 1.0)
+    }
+```
+
 - [ ] **Step 4: Run the tests to verify they pass**
 
 ```bash
 cd ~/Documents/"notch toys" && xcodebuild test -project NotchBasket.xcodeproj -scheme NotchBasket -destination 'platform=macOS' -only-testing:NotchBasketTests/NetSimulationTests 2>&1 | tail -8
 ```
 
-Expected: `** TEST SUCCEEDED **`, `Executed 13 tests`.
+Expected: `** TEST SUCCEEDED **`, `Executed 14 tests`.
 
 - [ ] **Step 5: Commit**
 
