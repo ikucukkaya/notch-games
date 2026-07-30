@@ -5,7 +5,10 @@ enum SideHoopLayout {
     static let mountEdgeX: CGFloat = 112
     static let backboardX: CGFloat = 84
     static let backboardWidth: CGFloat = 14
-    static let backboardHeight: CGFloat = 165.6
+    /// 138 originally, raised twice by 20%. At 2.05 rim diameters the board is now
+    /// about 88% of the NBA proportion (2.33); the remaining gap is the price of
+    /// hanging the assembly off the notch and keeping it on screen.
+    static let backboardHeight: CGFloat = 198.72
 
     /// The board grows upward only: its lower edge stays fixed relative to the
     /// rim so the mounting hardware, the bracket and the rim keep the alignment
