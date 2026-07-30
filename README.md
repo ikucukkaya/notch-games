@@ -233,7 +233,7 @@ The overlay is transparent because its own background has no pixels; it does not
 - Physical feel and exact hoop alignment still require manual validation across real MacBook panel sizes and display scaling modes.
 - The built-in display is preferred when notch geometry is available, but there is not yet a menu for choosing a specific display.
 - The hoop visually models broadcast-style side depth, while collision depth remains a deliberate 2D approximation using two small circular rim colliders.
-- Audio is procedurally generated at launch; future passes can still replace it with recorded ball, rim, board, and net assets.
+- Audio is procedurally generated at launch. The rim and backboard deliberately share one impact voice — a modally synthesized padded thud chosen by ear from auditioned candidates; future passes can still replace the bank with recorded assets.
 - Full-screen auxiliary windows are supported through public AppKit behaviors, but individual full-screen apps, Stage Manager layouts, or future macOS policies may place content differently.
 - Mission Control and protected system surfaces intentionally remain outside the app’s control.
 - Because click-through switches at the window level, a very fast move-and-click over the ball can occasionally require a second click on heavily loaded systems.

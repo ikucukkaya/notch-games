@@ -383,6 +383,42 @@ final class AudioSynthesisTests: XCTestCase {
         XCTAssertGreaterThan(samples.map { abs($0) }.max() ?? 0, 0.65)
     }
 
+    func testHoopImpactHasFullBodyAndSilentEndpoints() throws {
+        let samples = HoopImpactSynthesizer.samples(sampleRate: 44_100)
+
+        XCTAssertEqual(
+            samples.count,
+            Int(HoopImpactSynthesizer.duration * 44_100)
+        )
+        XCTAssertEqual(try XCTUnwrap(samples.first), 0, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(samples.last), 0, accuracy: 0.001)
+        XCTAssertGreaterThan(samples.map { abs($0) }.max() ?? 0, 0.65)
+    }
+
+    /// The old rim voice was three bright sines under one shared envelope — a
+    /// gated chord, not metal, and the complaint that prompted the redo. The
+    /// chosen impact is a low padded thud: measured 89 zero crossings and a
+    /// 0.025 peak step, so these bounds hold the character while the old rim's
+    /// 760 Hz fundamental alone would cross zero hundreds of times.
+    func testHoopImpactStaysPaddedNotGlassy() {
+        let samples = HoopImpactSynthesizer.samples(sampleRate: 44_100)
+        var maximumStep: Float = 0
+        var zeroCrossingCount = 0
+
+        for index in 1..<samples.count {
+            maximumStep = max(
+                maximumStep,
+                abs(samples[index] - samples[index - 1])
+            )
+            if (samples[index] >= 0) != (samples[index - 1] >= 0) {
+                zeroCrossingCount += 1
+            }
+        }
+
+        XCTAssertLessThan(maximumStep, 0.05)
+        XCTAssertLessThan(zeroCrossingCount, 130)
+    }
+
     func testCourtBounceAvoidsClickAndBrightGlassLikeOscillation() {
         let samples = BasketballCourtBounceSynthesizer.samples(sampleRate: 44_100)
         var maximumStep: Float = 0
