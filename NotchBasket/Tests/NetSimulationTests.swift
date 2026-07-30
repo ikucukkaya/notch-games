@@ -360,7 +360,39 @@ final class NetSimulationTests: XCTestCase {
         XCTAssertLessThan(reduced.displacementFromRest(), full.displacementFromRest())
     }
 
-    // MARK: - The net pushes back on the ball
+    /// The net must stop simulating once it has settled and no ball is near, or it
+    /// re-tessellates its whole mesh every frame forever — which pinned the idle
+    /// overlay near half a core.
+    func testNetFallsAsleepWhenIdle() {
+        let simulation = NetClothSimulation()
+
+        var sleptAt: Int?
+        for frame in 0..<120 {
+            simulation.step(deltaTime: 1.0 / 60.0)
+            if simulation.isResting, sleptAt == nil { sleptAt = frame }
+        }
+
+        XCTAssertNotNil(sleptAt, "the net never settled")
+        XCTAssertTrue(simulation.hasSettledSinceRedraw, "the view is still being asked to redraw")
+    }
+
+    func testContactWakesTheSleepingNet() {
+        let simulation = NetClothSimulation()
+        for _ in 0..<120 { simulation.step(deltaTime: 1.0 / 60.0) }
+        XCTAssertTrue(simulation.isResting, "precondition: the net should be asleep")
+
+        let force = simulation.step(
+            deltaTime: 1.0 / 60.0,
+            contact: descendingContact(y: hemY),
+            responseScale: 1
+        )
+
+        XCTAssertFalse(simulation.isResting, "a contact must wake the net")
+        XCTAssertFalse(simulation.hasSettledSinceRedraw, "a woken net must redraw")
+        XCTAssertGreaterThan(hypot(force.dx, force.dy), 0, "and actually respond")
+    }
+
+        // MARK: - The net pushes back on the ball
 
     func testNetDeceleratesDescendingBall() {
         let simulation = NetClothSimulation()

@@ -525,7 +525,11 @@ private final class NetMeshNode: SKNode {
             contact: ballContact,
             responseScale: reducedEffects ? 0.38 : 1
         )
-        render()
+        // A settled net redraws to the same paths it already has, so re-tessellating
+        // four shape nodes every idle frame is pure waste — skip it once asleep.
+        if !simulation.hasSettledSinceRedraw {
+            render()
+        }
         return force
     }
 

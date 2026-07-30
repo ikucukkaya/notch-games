@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 71;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -118,15 +118,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		A00000000000000000000005 = {
-			isa = PBXGroup;
-			children = (
-				A00000000000000000000010 /* NotchBasket */,
-				A00000000000000000000006 /* Frameworks */,
-				A00000000000000000000004 /* Products */,
-			);
-			sourceTree = "<group>";
-		};
 		A00000000000000000000004 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -134,6 +125,15 @@
 				F00000000000000000000202 /* NotchBasketTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000005 = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000010 /* NotchBasket */,
+				A00000000000000000000006 /* Frameworks */,
+				A00000000000000000000004 /* Products */,
+			);
 			sourceTree = "<group>";
 		};
 		A00000000000000000000006 /* Frameworks */ = {
@@ -241,10 +241,10 @@
 		A00000000000000000000018 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
-				F00000000000000000000101 /* GeometryTests.swift */,
 				F00000000000000000000102 /* ShotCalculationTests.swift */,
 				F00000000000000000000103 /* ScoringTests.swift */,
 				F00000000000000000000104 /* PersistenceTests.swift */,
+				F00000000000000000000101 /* GeometryTests.swift */,
 				F00000000000000000000105 /* NetSimulationTests.swift */,
 			);
 			path = Tests;
@@ -317,7 +317,6 @@
 			);
 			mainGroup = A00000000000000000000005;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			productRefGroup = A00000000000000000000004 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";

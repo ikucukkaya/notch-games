@@ -123,6 +123,18 @@ final class NetClothSimulation {
     /// the net, but a ball grabbed mid-flight never gets that frame.
     private var ballWasInsideCone = false
 
+    /// The net stops simulating and redrawing once it has settled and no ball is
+    /// touching it. Without this the sheet rebuilt two curved paths from 234 knots
+    /// and re-tessellated four SKShapeNodes every frame forever, which held the
+    /// idle overlay at ~47% of a core. `hasSettledSinceRedraw` lets the view skip
+    /// the redraw on frames where nothing moved.
+    private(set) var isResting = false
+    private(set) var hasSettledSinceRedraw = false
+
+    /// Below this per-frame knot speed the motion is invisible, so the net may
+    /// sleep. In points per 1/60 s frame.
+    private let restSpeed: CGFloat = 0.05
+
     // Cloth is solved by satisfying cord lengths rather than by integrating stiff
     // springs: at these stiffnesses an explicit spring would need a timestep far
     // below anything a display frame can afford.
@@ -270,6 +282,13 @@ final class NetClothSimulation {
         guard time > 0 else { return .zero }
         let scale = min(max(responseScale, 0), 1)
 
+        // A contact always wakes the net; once awake it runs until it settles.
+        if contact != nil { isResting = false }
+        guard !isResting else {
+            hasSettledSinceRedraw = true
+            return .zero
+        }
+
         // Integration runs at a fixed rate, set only by elapsed time. This is
         // what keeps damping, the constraint passes and the velocity the solver
         // bleeds independent of how fast the ball happens to be moving — tying the
@@ -332,6 +351,17 @@ final class NetClothSimulation {
             }
         }
 
+        // With no ball touching it, the net is free to fall asleep the moment its
+        // fastest knot is moving too slowly to see. A contact next frame wakes it.
+        if contact == nil {
+            var fastest: CGFloat = 0
+            for knot in knots where !knot.isPinned {
+                fastest = max(fastest, (knot.position - knot.previousPosition).length)
+            }
+            isResting = fastest < restSpeed
+        }
+        hasSettledSinceRedraw = false
+
         let magnitude = hypot(accumulated.dx, accumulated.dy)
         guard magnitude > maximumBallForce else { return accumulated }
         let limit = maximumBallForce / magnitude
@@ -370,6 +400,7 @@ final class NetClothSimulation {
     /// into the next shot and nudges a ball that merely passed the hoop.
     func resetForNewShot() {
         ballWasInsideCone = false
+        isResting = false
     }
 
     /// The most the backstop may move the ball in one frame.
