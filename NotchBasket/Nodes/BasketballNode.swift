@@ -54,7 +54,7 @@ final class BasketballNode: SKNode {
         // (which reads `radius`) disagreeing with what the rim actually collided
         // with. One radius, one ball.
         let body = SKPhysicsBody(circleOfRadius: radius)
-        body.mass = 0.34
+        body.mass = GameTuning.ballMass
         body.restitution = GameTuning.ballRestitution
         body.friction = GameTuning.ballFriction
         body.linearDamping = GameTuning.ballLinearDamping

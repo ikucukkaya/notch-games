@@ -13,6 +13,15 @@ enum GameTuning {
     static let ballDiameter: CGFloat = 50.6
     static let minimumBallDiameter: CGFloat = 40
     static let maximumBallDiameter: CGFloat = 60
+    static let ballMass: CGFloat = 0.34
+
+    /// The force the ball's own weight represents. Net reaction forces are sized
+    /// in multiples of this rather than in absolute numbers: a ratio to weight is
+    /// a real, scale-free quantity, whereas a bare force is only meaningful once
+    /// you also know the mass and SpriteKit's internal force scale — and getting
+    /// that wrong once already had the net shoving the ball around at 26 g.
+    static let ballWeight: CGFloat = ballMass * abs(gravity)
+
     static let ballRestitution: CGFloat = 0.74
     static let ballFriction: CGFloat = 0.58
     static let ballLinearDamping: CGFloat = 0.22

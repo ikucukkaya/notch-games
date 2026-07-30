@@ -479,6 +479,29 @@ final class NetSimulationTests: XCTestCase {
         XCTAssertGreaterThan(sideForce.dx, 0, "a side brush must push the ball outward")
     }
 
+    /// The cap being enforced was already covered; that it is a *sane* number was
+    /// not, and an absolute force of 90 turned out to be 26 g. Assert the ratio to
+    /// the ball's weight, which is scale-free and means something physical.
+    func testNetCannotFlingTheBall() {
+        let simulation = NetRingSimulation()
+        let force = simulation.step(
+            deltaTime: 1.0 / 60.0,
+            contact: NetRingContact(
+                position: CGPoint(x: 8, y: -70),
+                velocity: CGVector(dx: 400, dy: -2_800),
+                radius: GameTuning.ballDiameter / 2
+            ),
+            responseScale: 1
+        )
+
+        let gravities = hypot(force.dx, force.dy)
+            / GameTuning.ballMass
+            / abs(GameTuning.gravity)
+
+        XCTAssertGreaterThan(gravities, 0.2, "the net must actually push back")
+        XCTAssertLessThan(gravities, 4, "but a net does not fling a basketball")
+    }
+
     func testBallForceIsCapped() {
         let simulation = NetRingSimulation()
         let force = simulation.step(
@@ -496,7 +519,10 @@ final class NetSimulationTests: XCTestCase {
             0,
             "the contact must actually register, or the cap is untested"
         )
-        XCTAssertLessThanOrEqual(hypot(force.dx, force.dy), 90.001)
+        XCTAssertLessThanOrEqual(
+            hypot(force.dx, force.dy),
+            (3 * GameTuning.ballWeight) + 0.001
+        )
     }
 
     func testGripGrowsWithPenetration() {

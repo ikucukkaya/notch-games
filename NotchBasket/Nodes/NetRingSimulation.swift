@@ -118,14 +118,21 @@ final class NetRingSimulation {
 
     // The ring push and the ball reaction are different physical quantities and
     // must not share a constant. `contactStiffness` is an acceleration per unit
-    // of penetration applied to a ring; this one is a force in the units
-    // SKPhysicsBody.applyForce expects, acting on a 0.34 kg ball whose weight is
-    // only about 3.5. At 90 a deep contact brakes the ball hard without hurling
-    // it back out, and the cap is reached only at full penetration — so the grip
-    // curve below still shapes everything the player feels.
-    private let ballContactStiffness: CGFloat = 90
-    private let maximumBallForce: CGFloat = 90
-    private let contactDrag: CGFloat = 0.6
+    // of penetration applied to a ring; these are forces handed to
+    // SKPhysicsBody.applyForce, so they are written as multiples of the ball's
+    // own weight. Absolute numbers here are how the net ended up able to
+    // accelerate the ball at 26 g, which read on screen as the ball slaloming:
+    // a hard centring spring throws it across the axis, then back again.
+    private let ballContactStiffness: CGFloat = 2 * GameTuning.ballWeight
+    private let maximumBallForce: CGFloat = 3 * GameTuning.ballWeight
+
+    /// Cord friction, expressed as the speed at which it amounts to one ball
+    /// weight. It is also the lateral damping that stops the centring push from
+    /// oscillating, so it must not be small relative to `ballContactStiffness`.
+    private let contactDragReferenceSpeed: CGFloat = 600
+    private var contactDrag: CGFloat {
+        GameTuning.ballWeight / contactDragReferenceSpeed
+    }
 
     init() {
         buildRings()
