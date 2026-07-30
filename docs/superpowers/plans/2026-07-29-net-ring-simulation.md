@@ -1,5 +1,16 @@
 # Net Ring Simulation Implementation Plan
 
+> **Superseded, 2026-07-30.** The ring model this document specifies shipped and
+> then proved unable to dent locally: with three degrees of freedom per row, a
+> ball pressing from one side could only shrink the whole loop and slide it away,
+> which read on screen as the ball passing through the mesh. The net is now a 3D
+> woven sheet of 234 knots in `NetClothSimulation.swift`. This document is kept
+> as the record of how the cone-of-revolution idea was arrived at — the geometry,
+> the hem proportion and the contact philosophy all carried over — but the
+> per-row simulation it describes no longer exists.
+
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace NotchBasket's split cloth/funnel/swish net with a single cone-of-revolution ring stack that couples to the ball in both directions.
@@ -277,12 +288,11 @@ final class NetRingSimulation {
     static let topHalfWidth: CGFloat =
         GameTuning.rimPostOffset - GameTuning.rimPostRadius
 
-    /// Deliberately narrower than the ball's 24-point radius. The old cloth
-    /// model used 31, which is wider than the ball — a dead-centre shot could
-    /// fall the whole length of the net without touching a single cord, so the
-    /// net never billowed on a clean swish. A real net's hem is narrower than
-    /// the ball and has to be stretched open by it; that stretch is the swish.
-    static let bottomHalfWidth: CGFloat = 18
+    /// Narrower than the ball's 24-point radius, but only just — a regulation
+    /// hem is about 0.96 of a ball diameter. The old cloth model used 31, wider
+    /// than the ball, so a dead-centre shot could fall the whole length of the net
+    /// without touching a cord and the net never billowed on a clean swish.
+    static let bottomHalfWidth: CGFloat = 22
     static let depth: CGFloat = 76
 
     private(set) var rings: [NetRing] = []
@@ -637,19 +647,29 @@ Add to `NetSimulationTests.swift`:
 
     func testBallBelowTheHemPushesTheBottomRingUpward() {
         let simulation = NetRingSimulation()
+        let control = NetRingSimulation()
         let bottomIndex = NetRingSimulation.ringCount - 1
-        let restCenterY = simulation.rings[bottomIndex].restCenterY
         let contact = NetRingContact(
-            position: CGPoint(x: 0, y: restCenterY - 8),
+            position: CGPoint(
+                x: 0,
+                y: simulation.rings[bottomIndex].restCenterY - 8
+            ),
             velocity: CGVector(dx: 0, dy: 520),
             radius: GameTuning.ballDiameter / 2
         )
 
+        // Gravity sags every ring slightly below its authored rest position, so
+        // the control run — identical but untouched — is the only honest
+        // baseline for what the contact alone did.
         for _ in 0..<6 {
             simulation.step(deltaTime: 1.0 / 60.0, contact: contact, responseScale: 1)
+            control.step(deltaTime: 1.0 / 60.0, contact: nil, responseScale: 1)
         }
 
-        XCTAssertGreaterThan(simulation.rings[bottomIndex].centerY, restCenterY)
+        XCTAssertGreaterThan(
+            simulation.rings[bottomIndex].centerY,
+            control.rings[bottomIndex].centerY
+        )
     }
 
     func testBallBrushingOneSidePushesTheNetTheOtherWay() {
@@ -683,10 +703,30 @@ Add to `NetSimulationTests.swift`:
 
         simulation.step(deltaTime: 1.0 / 60.0, contact: contact, responseScale: 1)
 
+        // The ball is already gone. What it left behind is velocity, so the net
+        // visibly moves over the frames that follow — measuring position at the
+        // instant of crossing would sample before any of it has happened.
+        for _ in 0..<6 {
+            simulation.step(deltaTime: 1.0 / 60.0, contact: nil, responseScale: 1)
+        }
+
         XCTAssertGreaterThan(
             simulation.displacementFromRest(),
             1,
             "a ball crossing the whole net in one frame must still disturb it"
+        )
+
+        // The displacement alone does not gate the sweep resolution — with and
+        // without refinement it clears the threshold. Whether the ball is caught
+        // against more than one loop does: unrefined, only ring 10 registers
+        // (ring 9 deviates 0.0411); refined, ring 9 deviates 0.1567.
+        let disturbedRings = simulation.rings.filter {
+            abs($0.radius - $0.restRadius) > 0.05
+        }
+        XCTAssertGreaterThanOrEqual(
+            disturbedRings.count,
+            2,
+            "the swept substeps must catch the ball against more than one loop"
         )
     }
 
@@ -773,8 +813,30 @@ struct NetRingTouch {
 Add these constants to `NetRingSimulation`:
 
 ```swift
-    private let contactStiffness: CGFloat = 26
+    // Sized from the equilibrium a dwelling ball reaches: the contact push
+    // balances the ring's restoring spring at
+    //   contactStiffness * (ballRadius - r) == radiusStiffness * (r - restRadius)
+    // so k = 600 lets the hem settle at r ~= 22.2 against a ball of radius 24 —
+    // stretched most of the way open, which is what a real hem does. An order of
+    // magnitude lower and the net barely moves with a ball inside it.
+    private let contactStiffness: CGFloat = 600
     private let contactSwayShare: CGFloat = 0.45
+
+    /// A stiff contact spring with no dashpot overshoots by construction, and at
+    /// this stiffness the overshoot was large enough to invert ring order — the
+    /// ordering clamp was catching it in ~8.5% of substeps under hard contact
+    /// instead of sitting idle as a backstop. Critical damping for k = 600 on a
+    /// unit ring mass is about 49; staying under that keeps the net springy while
+    /// removing the overshoot. Damping vanishes at steady state, so the hem still
+    /// settles where the equilibrium says it should.
+    private let contactDamping: CGFloat = 30
+
+    /// A fast shot crosses the whole net inside one display frame. Sampling by
+    /// elapsed time alone would step the ball straight over the cords, so the
+    /// sweep is refined until each substep advances it only a few points — well
+    /// under a ring's spacing.
+    private let maximumBallTravelPerSubstep: CGFloat = 4
+    private let maximumSubstepCount = 64
 ```
 
 Replace `step(deltaTime:)` with:
@@ -792,7 +854,12 @@ Replace `step(deltaTime:)` with:
         let time = min(max(deltaTime, 0), 1.0 / 30.0)
         guard time > 0 else { return }
         let scale = min(max(responseScale, 0), 1)
-        let substepCount = max(1, Int(ceil(time / substepDuration)))
+        var substepCount = max(1, Int(ceil(time / substepDuration)))
+        if let contact {
+            let travel = hypot(contact.velocity.dx, contact.velocity.dy) * time
+            substepCount = max(substepCount, Int(ceil(travel / maximumBallTravelPerSubstep)))
+        }
+        substepCount = min(substepCount, maximumSubstepCount)
         let substep = time / CGFloat(substepCount)
 
         // Sweep the ball along its path across the substeps so a fast shot
@@ -833,7 +900,7 @@ Add the contact geometry and its effect on the rings:
     /// Distance from the ball's centre to the nearest point on a cord loop.
     /// One formula, so a ball inside the net, outside it, above it, or below it
     /// all take the same path — scoring is never a condition.
-    func touches(for contact: NetRingContact) -> [NetRingTouch] {
+    private func touches(for contact: NetRingContact) -> [NetRingTouch] {
         guard contact.radius > 0 else { return [] }
         var result: [NetRingTouch] = []
         for index in rings.indices where !rings[index].isPinned {
@@ -874,7 +941,44 @@ Add the contact geometry and its effect on the rings:
             rings[touch.ringIndex].centerXVelocity -=
                 impulse * contactSwayShare
                 * touch.radialNormal * touch.lateralSign * touch.axialFraction
+
+            // Oppose the ring's velocity along the push direction. Without this
+            // the ordering clamp becomes the primary stabiliser rather than a
+            // backstop.
+            let pushRadius = -touch.radialNormal
+            let pushVertical = -touch.verticalNormal
+            let normalVelocity =
+                (rings[touch.ringIndex].radiusVelocity * pushRadius)
+                + (rings[touch.ringIndex].centerYVelocity * pushVertical)
+            let damping = contactDamping * normalVelocity * responseScale * deltaTime
+            rings[touch.ringIndex].radiusVelocity -= damping * pushRadius
+            rings[touch.ringIndex].centerYVelocity -= damping * pushVertical
         }
+    }
+```
+
+Add one more test covering the dashpot. Without it, `contactDamping` could be
+set to 0 and every other test would still pass — the ordering clamp would take
+over the stabilising silently.
+
+```swift
+    func testContactDampingKeepsTheHemFromOvershooting() {
+        let simulation = NetRingSimulation()
+        let bottomIndex = NetRingSimulation.ringCount - 1
+        let contact = descendingContact(
+            y: simulation.rings[bottomIndex].restCenterY
+        )
+
+        var peak = simulation.rings[bottomIndex].radius
+        for _ in 0..<180 {
+            simulation.step(deltaTime: 1.0 / 60.0, contact: contact, responseScale: 1)
+            peak = max(peak, simulation.rings[bottomIndex].radius)
+        }
+        let settled = simulation.rings[bottomIndex].radius
+
+        // Damped the hem peaks 0.164 above where it settles; undamped it peaks
+        // 2.365 above. The threshold sits between those two measurements.
+        XCTAssertLessThan(peak - settled, 1.0)
     }
 ```
 
@@ -884,7 +988,7 @@ Add the contact geometry and its effect on the rings:
 cd ~/Documents/"notch toys" && xcodebuild test -project NotchBasket.xcodeproj -scheme NotchBasket -destination 'platform=macOS' -only-testing:NotchBasketTests/NetSimulationTests 2>&1 | tail -8
 ```
 
-Expected: `** TEST SUCCEEDED **`, `Executed 13 tests`.
+Expected: `** TEST SUCCEEDED **`, `Executed 14 tests`.
 
 - [ ] **Step 5: Commit**
 
@@ -1042,6 +1146,14 @@ struct NetGrip {
 Add to `NetRingSimulation`:
 
 ```swift
+    // The ring push and the ball reaction are different physical quantities and
+    // must not share a constant. `contactStiffness` is an acceleration per unit
+    // of penetration applied to a ring; this one is a force in the units
+    // SKPhysicsBody.applyForce expects, acting on a 0.34 kg ball whose weight is
+    // only about 3.5. At 90 a deep contact brakes the ball hard without hurling
+    // it back out, and the cap is reached only at full penetration — so the grip
+    // curve below still shapes everything the player feels.
+    private let ballContactStiffness: CGFloat = 90
     private let maximumBallForce: CGFloat = 90
     private let contactDrag: CGFloat = 0.6
 
@@ -1144,7 +1256,7 @@ And add the reaction itself:
                 penetration: touch.penetration,
                 ballRadius: contact.radius
             )
-            let push = contactStiffness * grip.normal * responseScale
+            let push = ballContactStiffness * grip.normal * responseScale
             let normalX = touch.radialNormal * touch.lateralSign
                 * touch.axialFraction
             force.dx += push * normalX
@@ -1804,7 +1916,9 @@ Secondary dials, in the order worth touching:
 
 | Constant | Raise it to… | Lower it to… |
 |---|---|---|
-| `contactStiffness` (26) | make the net springier, ball pops out | let the ball sink deeper |
+| `contactStiffness` (600) | open the net wider around the ball | let the net hug the ball tighter |
+| `contactDamping` (30) | kill contact overshoot, calmer net | more rebound; past ~49 the ordering clamp starts doing the stabilising |
+| `ballContactStiffness` (90) | make the net springier, ball pops out | let the ball sink deeper |
 | `contactDrag` (0.6) | swallow more speed, heavier net | keep the ball lively |
 | `cordStiffness` (340) | sharper snap-back and faster wave | looser, older-looking net |
 | `sagDamping` / `radiusDamping` (7 / 9) | settle sooner | let the net ring longer after a shot |

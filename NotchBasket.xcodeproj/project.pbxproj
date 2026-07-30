@@ -31,10 +31,12 @@
 		B00000000000000000000016 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000016 /* SettingsView.swift */; };
 		B00000000000000000000017 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000017 /* OnboardingView.swift */; };
 		B00000000000000000000018 /* AuxiliaryWindowControllers.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000018 /* AuxiliaryWindowControllers.swift */; };
+		B00000000000000000000019 /* NetClothSimulation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000019 /* NetClothSimulation.swift */; };
 		B00000000000000000000101 /* GeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000101 /* GeometryTests.swift */; };
 		B00000000000000000000102 /* ShotCalculationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000102 /* ShotCalculationTests.swift */; };
 		B00000000000000000000103 /* ScoringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000103 /* ScoringTests.swift */; };
 		B00000000000000000000104 /* PersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000104 /* PersistenceTests.swift */; };
+		B00000000000000000000105 /* NetSimulationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000105 /* NetSimulationTests.swift */; };
 		B00000000000000000000401 /* AppKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F00000000000000000000401 /* AppKit.framework */; };
 		B00000000000000000000402 /* SpriteKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F00000000000000000000402 /* SpriteKit.framework */; };
 		B00000000000000000000403 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F00000000000000000000403 /* SwiftUI.framework */; };
@@ -77,11 +79,13 @@
 		F00000000000000000000016 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		F00000000000000000000017 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		F00000000000000000000018 /* AuxiliaryWindowControllers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuxiliaryWindowControllers.swift; sourceTree = "<group>"; };
+		F00000000000000000000019 /* NetClothSimulation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetClothSimulation.swift; sourceTree = "<group>"; };
 		F00000000000000000000030 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		F00000000000000000000101 /* GeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeometryTests.swift; sourceTree = "<group>"; };
 		F00000000000000000000102 /* ShotCalculationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShotCalculationTests.swift; sourceTree = "<group>"; };
 		F00000000000000000000103 /* ScoringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoringTests.swift; sourceTree = "<group>"; };
 		F00000000000000000000104 /* PersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceTests.swift; sourceTree = "<group>"; };
+		F00000000000000000000105 /* NetSimulationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetSimulationTests.swift; sourceTree = "<group>"; };
 		F00000000000000000000201 /* NotchBasket.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NotchBasket.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F00000000000000000000202 /* NotchBasketTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NotchBasketTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F00000000000000000000401 /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = System/Library/Frameworks/AppKit.framework; sourceTree = SDKROOT; };
@@ -200,6 +204,7 @@
 				F0000000000000000000000F /* BasketballNode.swift */,
 				F00000000000000000000010 /* HoopNode.swift */,
 				F00000000000000000000011 /* AimIndicatorNode.swift */,
+				F00000000000000000000019 /* NetClothSimulation.swift */,
 			);
 			path = Nodes;
 			sourceTree = "<group>";
@@ -240,6 +245,7 @@
 				F00000000000000000000102 /* ShotCalculationTests.swift */,
 				F00000000000000000000103 /* ScoringTests.swift */,
 				F00000000000000000000104 /* PersistenceTests.swift */,
+				F00000000000000000000105 /* NetSimulationTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -368,6 +374,7 @@
 				B00000000000000000000016 /* SettingsView.swift in Sources */,
 				B00000000000000000000017 /* OnboardingView.swift in Sources */,
 				B00000000000000000000018 /* AuxiliaryWindowControllers.swift in Sources */,
+				B00000000000000000000019 /* NetClothSimulation.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -379,6 +386,7 @@
 				B00000000000000000000102 /* ShotCalculationTests.swift in Sources */,
 				B00000000000000000000103 /* ScoringTests.swift in Sources */,
 				B00000000000000000000104 /* PersistenceTests.swift in Sources */,
+				B00000000000000000000105 /* NetSimulationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

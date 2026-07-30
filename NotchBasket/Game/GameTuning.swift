@@ -6,9 +6,22 @@ enum GameTuning {
     static let lowGravity: CGFloat = -7.8
     static let highGravity: CGFloat = -12.4
 
-    static let ballDiameter: CGFloat = 48
+    /// Regulation proportion against the rim. An NBA ball is 29.5" around, so
+    /// 9.39" across, against an 18" rim — a ratio of 0.522. The rim's clear
+    /// opening here is `2 * (rimPostOffset - rimPostRadius)` = 97, so 50.6
+    /// reproduces that exactly. It was 48 (0.495), which read a touch small.
+    static let ballDiameter: CGFloat = 50.6
     static let minimumBallDiameter: CGFloat = 40
     static let maximumBallDiameter: CGFloat = 60
+    static let ballMass: CGFloat = 0.34
+
+    /// The force the ball's own weight represents. Net reaction forces are sized
+    /// in multiples of this rather than in absolute numbers: a ratio to weight is
+    /// a real, scale-free quantity, whereas a bare force is only meaningful once
+    /// you also know the mass and SpriteKit's internal force scale — and getting
+    /// that wrong once already had the net shoving the ball around at 26 g.
+    static let ballWeight: CGFloat = ballMass * abs(gravity)
+
     static let ballRestitution: CGFloat = 0.74
     static let ballFriction: CGFloat = 0.58
     static let ballLinearDamping: CGFloat = 0.22

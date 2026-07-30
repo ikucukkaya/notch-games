@@ -245,7 +245,7 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         removeAction(forKey: "scheduledReset")
         resetController.reset()
         scoreController.resetForNewShot()
-        hoop?.resetNetBallGuide()
+        hoop?.resetNetForNewShot()
         if interruptedUnscoredShot, statistics.streak != 0 {
             statistics.streak = 0
             updateScoreOverlay()
@@ -388,7 +388,7 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         if isGamePresented, let hoop {
             let ballCanTouchNet = ballState != .spawning && ballState != .resetting
             let interactingBall = ballCanTouchNet ? ball : nil
-            hoop.updateNet(
+            let netForce = hoop.updateNet(
                 deltaTime: deltaTime,
                 ballScenePosition: interactingBall?.position,
                 ballVelocity: interactingBall?.physicsBody?.velocity ?? .zero,
@@ -396,16 +396,10 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
                 reducedEffects: preferences.reducedEffects
             )
 
-            if (ballState == .flying || ballState == .scored),
-               let ball,
-               let guideResponse = hoop.guideBallThroughNet(
-                    ballScenePosition: ball.position,
-                    ballVelocity: ball.physicsBody?.velocity ?? .zero,
-                    ballRadius: ball.radius,
-                    deltaTime: deltaTime
-               ) {
-                ball.position = guideResponse.position
-                ball.physicsBody?.velocity = guideResponse.velocity
+            // Only a ball the physics engine owns can be pushed. While aiming,
+            // the net still deforms visually but the drag controls the ball.
+            if ballState == .flying || ballState == .scored {
+                interactingBall?.physicsBody?.applyForce(netForce)
             }
         }
 
@@ -429,6 +423,23 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
             finishShot(reason: completionReason)
         }
         updateVelocityDebug(ball: ball, velocity: velocity)
+    }
+
+    /// Numerical backstop only: recovers a ball the integrator let slip through
+    /// a cord. Runs after physics so it never fights the integrator.
+    override func didSimulatePhysics() {
+        guard isGamePresented,
+              ballState == .flying || ballState == .scored,
+              let ball,
+              let hoop,
+              let corrected = hoop.netContainmentCorrection(
+                  ballScenePosition: ball.position,
+                  ballRadius: ball.radius
+              )
+        else {
+            return
+        }
+        ball.position = corrected
     }
 
     func didBegin(_ contact: SKPhysicsContact) {
@@ -517,7 +528,7 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         ball?.removeFromParent()
         resetController.reset()
         scoreController.resetForNewShot()
-        hoop?.resetNetBallGuide()
+        hoop?.resetNetForNewShot()
         didScoreCurrentShot = false
 
         let diameter = min(
@@ -617,10 +628,7 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         updateScoreOverlay()
         onStatisticsChanged?(statistics)
 
-        hoop?.playScoreAnimation(
-            reducedEffects: preferences.reducedEffects,
-            ballVelocity: ball?.physicsBody?.velocity ?? .zero
-        )
+        hoop?.playScoreAnimation(reducedEffects: preferences.reducedEffects)
         showScorePop()
         emitScoreParticles()
         audioService.play(.score, intensity: 0.9, preferences: preferences)

@@ -1,4 +1,5 @@
 import AppKit
+import SpriteKit
 import XCTest
 @testable import NotchBasket
 
@@ -63,6 +64,58 @@ final class GeometryTests: XCTestCase {
         XCTAssertGreaterThan(hoop.zPosition + frontRim.zPosition, ball.zPosition)
     }
 
+    /// The net simulation runs in the net's own local space, but the scene hands
+    /// it ball positions in scene space and applies the force it returns to the
+    /// ball. Every NetSimulationTests case drives the sim directly, so nothing
+    /// there would notice if HoopNode mapped the coordinates wrong — dropping the
+    /// netNode offset would put every contact ~80 points off with the suite still
+    /// green. This exercises the whole scene -> hoop -> net -> force path.
+    func testHoopMapsSceneContactIntoNetSpace() {
+        let scene = SKScene(size: CGSize(width: 800, height: 600))
+        let hoop = HoopNode()
+        hoop.position = CGPoint(x: 500, y: 400)
+        scene.addChild(hoop)
+
+        // A ball settling into the hem, expressed in SCENE coordinates. The net's
+        // hem sits at rimY - depth below the hoop's own origin, plus the net node's
+        // own offset of rimY - 2.
+        let hemInHoop = CGPoint(x: 0, y: (GameTuning.rimY - 2) + (-NetClothSimulation.depth + 6))
+        let hemInScene = CGPoint(
+            x: hoop.position.x + hemInHoop.x,
+            y: hoop.position.y + hemInHoop.y
+        )
+
+        let force = hoop.updateNet(
+            deltaTime: 1.0 / 60.0,
+            ballScenePosition: hemInScene,
+            ballVelocity: CGVector(dx: 0, dy: -600),
+            ballRadius: GameTuning.ballDiameter / 2,
+            reducedEffects: false
+        )
+
+        XCTAssertGreaterThan(
+            force.dy,
+            0,
+            "a ball at the hem, placed in scene space, must be pushed back up"
+        )
+
+        // The same ball a full net-width off to the side touches nothing: proof the
+        // mapping is not simply returning a force for any input.
+        let asideInScene = CGPoint(x: hemInScene.x + 400, y: hemInScene.y)
+        let farHoop = HoopNode()
+        farHoop.position = hoop.position
+        scene.addChild(farHoop)
+        let farForce = farHoop.updateNet(
+            deltaTime: 1.0 / 60.0,
+            ballScenePosition: asideInScene,
+            ballVelocity: CGVector(dx: 0, dy: -600),
+            ballRadius: GameTuning.ballDiameter / 2,
+            reducedEffects: false
+        )
+        XCTAssertEqual(farForce.dx, 0, accuracy: 0.001)
+        XCTAssertEqual(farForce.dy, 0, accuracy: 0.001)
+    }
+
     func testRealisticMountingAssemblyIsPresent() {
         let hoop = HoopNode()
 
@@ -70,6 +123,50 @@ final class GeometryTests: XCTestCase {
         XCTAssertNotNil(hoop.childNode(withName: "supportArmVisual"))
         XCTAssertNotNil(hoop.childNode(withName: "mountBracketVisual"))
         XCTAssertNotNil(hoop.childNode(withName: "wallMountVisual"))
+    }
+
+    /// The guide is drawn over an unknown desktop and the app never samples the
+    /// screen, so every bright layer needs a dark one behind it or it disappears
+    /// over a white window.
+    func testAimGuideCarriesADarkLayerBehindEveryBrightOne() throws {
+        let indicator = AimIndicatorNode()
+        indicator.update(
+            from: CGPoint(x: 100, y: 100),
+            velocity: CGVector(dx: 400, dy: 600),
+            gravity: GameTuning.gravity,
+            powerFraction: 0.5
+        )
+
+        let trajectoryOutline = try XCTUnwrap(
+            indicator.childNode(withName: "aimTrajectoryOutline") as? SKShapeNode
+        )
+        let trajectoryFill = try XCTUnwrap(
+            indicator.childNode(withName: "aimTrajectoryFill") as? SKShapeNode
+        )
+        let powerOutline = try XCTUnwrap(
+            indicator.childNode(withName: "aimPowerOutline") as? SKShapeNode
+        )
+        let powerRing = try XCTUnwrap(
+            indicator.childNode(withName: "aimPowerRing") as? SKShapeNode
+        )
+
+        XCTAssertNotNil(trajectoryOutline.path, "the dark dots must be drawn too")
+        XCTAssertNotNil(powerOutline.path, "the dark ring must be drawn too")
+
+        // Each dark layer has to sit behind its bright twin and actually be dark.
+        XCTAssertLessThan(trajectoryOutline.zPosition, trajectoryFill.zPosition)
+        XCTAssertLessThan(powerOutline.zPosition, powerRing.zPosition)
+        XCTAssertLessThan(
+            trajectoryOutline.fillColor.brightnessComponentOrOne,
+            0.35
+        )
+        XCTAssertLessThan(
+            powerOutline.strokeColor.brightnessComponentOrOne,
+            0.35
+        )
+
+        // And the dark ring must be wide enough to show around the bright one.
+        XCTAssertGreaterThan(powerOutline.lineWidth, powerRing.lineWidth)
     }
 
     func testBottomDockInferenceAndFloor() {
@@ -105,16 +202,38 @@ final class GeometryTests: XCTestCase {
         )
     }
 
+    /// The net simulation is handed `ball.radius`, while the rim and backboard
+    /// collide against the physics body. If those two disagree the ball behaves
+    /// as one size and looks another, which is what a 0.94 collision fudge used
+    /// to do here.
+    func testBallCollidesAtTheSizeItIsDrawn() throws {
+        let ball = BasketballNode(diameter: GameTuning.ballDiameter)
+        let body = try XCTUnwrap(ball.physicsBody)
+
+        // Compare against a body built at the drawn radius rather than computing
+        // an area by hand: SpriteKit reports `area` in its own scaled units, and
+        // building the reference the same way makes the scale cancel out.
+        let drawnSize = SKPhysicsBody(circleOfRadius: ball.radius)
+
+        XCTAssertEqual(body.area, drawnSize.area, accuracy: drawnSize.area * 0.01)
+    }
+
     func testBallSpawnStaysInsideBoundaries() {
+        let floorY: CGFloat = 80
         let spawn = ScreenGeometryService.ballSpawnPoint(
             screenWidth: 1200,
-            floorY: 80,
+            floorY: floorY,
             leftBoundaryX: 250,
             rightBoundaryX: 1192
         )
 
         XCTAssertEqual(spawn.x, 600)
-        XCTAssertEqual(spawn.y, 109)
+
+        // Assert the clearance, not a coordinate baked from one ball diameter:
+        // the ball has to rest just above the floor at whatever size it is.
+        let ballRadius = GameTuning.ballDiameter / 2
+        XCTAssertGreaterThan(spawn.y - ballRadius, floorY)
+        XCTAssertLessThan(spawn.y - ballRadius, floorY + 12)
     }
 
     func testOverlayPassesClicksThroughAwayFromBall() {
@@ -165,21 +284,32 @@ final class GeometryTests: XCTestCase {
     }
 
     func testHoopHeightIsClampedInsidePlayableScreen() {
+        let screenHeight: CGFloat = 900
+
         XCTAssertEqual(HoopHeightPolicy.clampedAnchorY(
             20,
             floorY: 80,
-            screenHeight: 900
+            screenHeight: screenHeight
         ), 260)
-        XCTAssertEqual(HoopHeightPolicy.clampedAnchorY(
-            1_000,
-            floorY: 80,
-            screenHeight: 900
-        ), 872)
         XCTAssertEqual(HoopHeightPolicy.clampedAnchorY(
             600,
             floorY: 80,
-            screenHeight: 900
+            screenHeight: screenHeight
         ), 600)
+
+        // Assert the property rather than the number: at the top of its range the
+        // backboard's upper edge — the highest part of the assembly — must still
+        // be on screen, and not pointlessly far below the edge either. Written
+        // this way the test survives the board changing size, and still fails if
+        // the ceiling stops accounting for it.
+        let highest = HoopHeightPolicy.clampedAnchorY(
+            1_000,
+            floorY: 80,
+            screenHeight: screenHeight
+        )
+        let boardTop = highest + SideHoopLayout.assemblyTopY
+        XCTAssertLessThan(boardTop, screenHeight)
+        XCTAssertGreaterThan(boardTop, screenHeight - 40)
     }
 
     func testMovingAndScoredBallsRemainGrabbable() {
@@ -238,247 +368,6 @@ final class GeometryTests: XCTestCase {
         ))
     }
 
-    func testNetTopRowStaysPinnedWhileLowerRowsMove() {
-        let simulation = NetClothSimulation()
-        let topRest = simulation.restPosition(row: 0, column: 5)
-
-        simulation.applySwishImpulse(
-            ballVelocity: CGVector(dx: 420, dy: -780)
-        )
-        for _ in 0..<30 {
-            simulation.step(deltaTime: 1.0 / 60.0, ballContact: nil)
-        }
-
-        XCTAssertEqual(simulation.position(row: 0, column: 5), topRest)
-        XCTAssertGreaterThan(simulation.totalDisplacement(), 0.1)
-    }
-
-    func testSideViewNetUsesDenseLongVerletMesh() {
-        let simulation = NetClothSimulation()
-
-        XCTAssertEqual(simulation.rowCount, 10)
-        XCTAssertEqual(simulation.columnCount, 10)
-        XCTAssertEqual(simulation.particleCount, 121)
-        XCTAssertLessThan(
-            simulation.restPosition(row: 0, column: 5).y,
-            simulation.restPosition(row: 0, column: 0).y
-        )
-        XCTAssertLessThan(
-            simulation.restPosition(row: simulation.rowCount, column: 5).y,
-            simulation.restPosition(row: 0, column: 5).y - 70
-        )
-    }
-
-    func testDescendingBallIsCapturedWhenItCrossesNetOpening() {
-        let guide = NetFunnelGuide()
-        let response = guide.response(
-            for: NetBallContact(
-                position: CGPoint(x: 8, y: -3),
-                velocity: CGVector(dx: 120, dy: -600),
-                radius: 24
-            ),
-            deltaTime: 1.0 / 60.0
-        )
-
-        XCTAssertNotNil(response)
-        XCTAssertTrue(guide.isCapturingBall)
-    }
-
-    func testCapturedBallCannotEscapeThroughNetSide() throws {
-        let guide = NetFunnelGuide()
-        _ = guide.response(
-            for: NetBallContact(
-                position: CGPoint(x: 0, y: -3),
-                velocity: CGVector(dx: 0, dy: -600),
-                radius: 24
-            ),
-            deltaTime: 1.0 / 60.0
-        )
-
-        let response = try XCTUnwrap(guide.response(
-            for: NetBallContact(
-                position: CGPoint(x: 42, y: -40),
-                velocity: CGVector(dx: 1_200, dy: -700),
-                radius: 24
-            ),
-            deltaTime: 1.0 / 60.0
-        ))
-
-        XCTAssertLessThan(abs(response.position.x), 16)
-        XCTAssertLessThan(response.velocity.dx, 0)
-        XCTAssertTrue(guide.isCapturingBall)
-    }
-
-    func testCapturedBallReleasesOnlyAfterClearingBottomOpening() throws {
-        let guide = NetFunnelGuide()
-        _ = guide.response(
-            for: NetBallContact(
-                position: CGPoint(x: 0, y: -4),
-                velocity: CGVector(dx: 0, dy: -600),
-                radius: 24
-            ),
-            deltaTime: 1.0 / 60.0
-        )
-
-        let sideResponse = try XCTUnwrap(guide.response(
-            for: NetBallContact(
-                position: CGPoint(x: 50, y: -62),
-                velocity: CGVector(dx: 900, dy: -650),
-                radius: 24
-            ),
-            deltaTime: 1.0 / 60.0
-        ))
-        XCTAssertLessThan(abs(sideResponse.position.x), 11)
-        XCTAssertTrue(guide.isCapturingBall)
-
-        let bottomResponse = try XCTUnwrap(guide.response(
-            for: NetBallContact(
-                position: CGPoint(x: 30, y: -101),
-                velocity: CGVector(dx: 500, dy: -620),
-                radius: 24
-            ),
-            deltaTime: 1.0 / 60.0
-        ))
-        XCTAssertLessThanOrEqual(abs(bottomResponse.position.x), 7)
-        XCTAssertFalse(guide.isCapturingBall)
-    }
-
-    func testBallTouchingNetFromBelowIsNotCapturedByFunnel() {
-        let guide = NetFunnelGuide()
-        let response = guide.response(
-            for: NetBallContact(
-                position: CGPoint(x: 0, y: -70),
-                velocity: CGVector(dx: 0, dy: 500),
-                radius: 24
-            ),
-            deltaTime: 1.0 / 60.0
-        )
-
-        XCTAssertNil(response)
-        XCTAssertFalse(guide.isCapturingBall)
-    }
-
-    func testBallTouchingNetFromBelowPushesItUpwardWithoutScoring() {
-        let simulation = NetClothSimulation()
-        let rest = simulation.restPosition(row: simulation.rowCount, column: 5)
-        let contact = NetBallContact(
-            position: CGPoint(x: rest.x, y: rest.y - 18),
-            velocity: CGVector(dx: 0, dy: 180),
-            radius: 22
-        )
-
-        simulation.step(deltaTime: 1.0 / 60.0, ballContact: contact)
-
-        XCTAssertGreaterThan(
-            simulation.position(row: simulation.rowCount, column: 5).y,
-            rest.y
-        )
-    }
-
-    func testFastBallUsesSweptContactInsteadOfTunnelingThroughNet() {
-        let simulation = NetClothSimulation()
-        let rest = simulation.restPosition(row: 4, column: 5)
-        let contact = NetBallContact(
-            position: CGPoint(x: rest.x, y: rest.y + 30),
-            velocity: CGVector(dx: 0, dy: 3_600),
-            radius: 8
-        )
-
-        simulation.step(deltaTime: 1.0 / 60.0, ballContact: contact)
-
-        XCTAssertGreaterThan(simulation.position(row: 4, column: 5).y, rest.y)
-    }
-
-    func testNetMotionDampsBackTowardRest() {
-        let simulation = NetClothSimulation()
-        simulation.applySwishImpulse(
-            ballVelocity: CGVector(dx: 500, dy: -900)
-        )
-        simulation.step(deltaTime: 1.0 / 60.0, ballContact: nil)
-        let initialDisplacement = simulation.totalDisplacement()
-
-        for _ in 0..<300 {
-            simulation.step(deltaTime: 1.0 / 60.0, ballContact: nil)
-        }
-
-        XCTAssertLessThan(simulation.totalDisplacement(), initialDisplacement)
-    }
-
-    func testNetKnotsCannotCrossOrCollapseDuringSevereContact() {
-        let simulation = NetClothSimulation()
-        let contactCenter = simulation.restPosition(row: 8, column: 5)
-
-        for frame in 0..<24 {
-            let direction: CGFloat = frame.isMultiple(of: 2) ? 1 : -1
-            let contact = NetBallContact(
-                position: CGPoint(
-                    x: contactCenter.x + (direction * 7),
-                    y: contactCenter.y + CGFloat(frame % 3) - 1
-                ),
-                velocity: CGVector(dx: direction * 2_400, dy: -1_500),
-                radius: 30
-            )
-            simulation.step(deltaTime: 1.0 / 60.0, ballContact: contact)
-        }
-
-        for row in 1...simulation.rowCount {
-            for column in 0..<simulation.columnCount {
-                let left = simulation.position(row: row, column: column)
-                let right = simulation.position(row: row, column: column + 1)
-                XCTAssertGreaterThan(right.x - left.x, 1)
-            }
-        }
-
-        for row in 0..<simulation.rowCount {
-            for column in 0...simulation.columnCount {
-                let upper = simulation.position(row: row, column: column)
-                let lower = simulation.position(row: row + 1, column: column)
-                XCTAssertGreaterThan(upper.y - lower.y, 1)
-            }
-        }
-    }
-
-    func testNetUntanglesAndReturnsAfterRepeatedBallContact() {
-        let simulation = NetClothSimulation()
-        let contactCenter = simulation.restPosition(row: 7, column: 5)
-
-        for _ in 0..<18 {
-            simulation.step(
-                deltaTime: 1.0 / 60.0,
-                ballContact: NetBallContact(
-                    position: contactCenter,
-                    velocity: CGVector(dx: 1_800, dy: -1_400),
-                    radius: 28
-                )
-            )
-        }
-        let impactedDisplacement = simulation.totalDisplacement()
-
-        for _ in 0..<480 {
-            simulation.step(deltaTime: 1.0 / 60.0, ballContact: nil)
-        }
-
-        XCTAssertLessThan(simulation.totalDisplacement(), impactedDisplacement * 0.25)
-        let bottomRow = simulation.rowCount
-        for column in 0..<simulation.columnCount {
-            let left = simulation.position(row: bottomRow, column: column)
-            let right = simulation.position(row: bottomRow, column: column + 1)
-            XCTAssertGreaterThan(right.x - left.x, 1)
-        }
-    }
-
-    func testReducedMotionScalesNetResponse() {
-        let full = NetClothSimulation()
-        let reduced = NetClothSimulation()
-        let velocity = CGVector(dx: 520, dy: -880)
-
-        full.applySwishImpulse(ballVelocity: velocity, responseScale: 1)
-        reduced.applySwishImpulse(ballVelocity: velocity, responseScale: 0.3)
-        full.step(deltaTime: 1.0 / 60.0, ballContact: nil)
-        reduced.step(deltaTime: 1.0 / 60.0, ballContact: nil)
-
-        XCTAssertLessThan(reduced.totalDisplacement(), full.totalDisplacement())
-    }
 }
 
 final class AudioSynthesisTests: XCTestCase {
@@ -511,5 +400,13 @@ final class AudioSynthesisTests: XCTestCase {
 
         XCTAssertLessThan(maximumStep, 0.025)
         XCTAssertLessThan(zeroCrossingCount, 60)
+    }
+}
+
+private extension NSColor {
+    /// `brightnessComponent` traps on colours outside a compatible space, and the
+    /// aim guide builds its colours with `withAlphaComponent`, so convert first.
+    var brightnessComponentOrOne: CGFloat {
+        (usingColorSpace(.deviceRGB) ?? .white).brightnessComponent
     }
 }
