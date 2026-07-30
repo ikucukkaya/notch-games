@@ -467,7 +467,7 @@ private final class NetMeshNode: SKNode {
     private let rearMesh = SKShapeNode()
     private let frontOutline = SKShapeNode()
     private let frontMesh = SKShapeNode()
-    private let simulation = NetRingSimulation()
+    private let simulation = NetClothSimulation()
 
     override init() {
         super.init()
@@ -535,7 +535,7 @@ private final class NetMeshNode: SKNode {
     }
 
     private func render() {
-        let paths = NetMeshPathBuilder.paths(for: simulation.rings)
+        let paths = NetMeshPathBuilder.paths(for: simulation)
         rearOutline.path = paths.rear
         rearMesh.path = paths.rear
         frontOutline.path = paths.front
