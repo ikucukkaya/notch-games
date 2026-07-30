@@ -150,16 +150,38 @@ final class GeometryTests: XCTestCase {
         )
     }
 
+    /// The net simulation is handed `ball.radius`, while the rim and backboard
+    /// collide against the physics body. If those two disagree the ball behaves
+    /// as one size and looks another, which is what a 0.94 collision fudge used
+    /// to do here.
+    func testBallCollidesAtTheSizeItIsDrawn() throws {
+        let ball = BasketballNode(diameter: GameTuning.ballDiameter)
+        let body = try XCTUnwrap(ball.physicsBody)
+
+        // Compare against a body built at the drawn radius rather than computing
+        // an area by hand: SpriteKit reports `area` in its own scaled units, and
+        // building the reference the same way makes the scale cancel out.
+        let drawnSize = SKPhysicsBody(circleOfRadius: ball.radius)
+
+        XCTAssertEqual(body.area, drawnSize.area, accuracy: drawnSize.area * 0.01)
+    }
+
     func testBallSpawnStaysInsideBoundaries() {
+        let floorY: CGFloat = 80
         let spawn = ScreenGeometryService.ballSpawnPoint(
             screenWidth: 1200,
-            floorY: 80,
+            floorY: floorY,
             leftBoundaryX: 250,
             rightBoundaryX: 1192
         )
 
         XCTAssertEqual(spawn.x, 600)
-        XCTAssertEqual(spawn.y, 109)
+
+        // Assert the clearance, not a coordinate baked from one ball diameter:
+        // the ball has to rest just above the floor at whatever size it is.
+        let ballRadius = GameTuning.ballDiameter / 2
+        XCTAssertGreaterThan(spawn.y - ballRadius, floorY)
+        XCTAssertLessThan(spawn.y - ballRadius, floorY + 12)
     }
 
     func testOverlayPassesClicksThroughAwayFromBall() {

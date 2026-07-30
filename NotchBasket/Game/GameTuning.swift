@@ -6,7 +6,11 @@ enum GameTuning {
     static let lowGravity: CGFloat = -7.8
     static let highGravity: CGFloat = -12.4
 
-    static let ballDiameter: CGFloat = 48
+    /// Regulation proportion against the rim. An NBA ball is 29.5" around, so
+    /// 9.39" across, against an 18" rim — a ratio of 0.522. The rim's clear
+    /// opening here is `2 * (rimPostOffset - rimPostRadius)` = 97, so 50.6
+    /// reproduces that exactly. It was 48 (0.495), which read a touch small.
+    static let ballDiameter: CGFloat = 50.6
     static let minimumBallDiameter: CGFloat = 40
     static let maximumBallDiameter: CGFloat = 60
     static let ballRestitution: CGFloat = 0.74

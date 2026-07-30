@@ -48,7 +48,12 @@ final class BasketballNode: SKNode {
     }
 
     private func configurePhysics() {
-        let body = SKPhysicsBody(circleOfRadius: radius * 0.94)
+        // The collision radius is the drawn radius. It used to be 0.94 of it —
+        // the usual trick of making a hoop quieter about near misses — but that
+        // stacked on top of an already-generous rim and left the net simulation
+        // (which reads `radius`) disagreeing with what the rim actually collided
+        // with. One radius, one ball.
+        let body = SKPhysicsBody(circleOfRadius: radius)
         body.mass = 0.34
         body.restitution = GameTuning.ballRestitution
         body.friction = GameTuning.ballFriction
