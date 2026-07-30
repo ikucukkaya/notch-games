@@ -1,4 +1,5 @@
 import AppKit
+import SpriteKit
 import XCTest
 @testable import NotchBasket
 
@@ -70,6 +71,50 @@ final class GeometryTests: XCTestCase {
         XCTAssertNotNil(hoop.childNode(withName: "supportArmVisual"))
         XCTAssertNotNil(hoop.childNode(withName: "mountBracketVisual"))
         XCTAssertNotNil(hoop.childNode(withName: "wallMountVisual"))
+    }
+
+    /// The guide is drawn over an unknown desktop and the app never samples the
+    /// screen, so every bright layer needs a dark one behind it or it disappears
+    /// over a white window.
+    func testAimGuideCarriesADarkLayerBehindEveryBrightOne() throws {
+        let indicator = AimIndicatorNode()
+        indicator.update(
+            from: CGPoint(x: 100, y: 100),
+            velocity: CGVector(dx: 400, dy: 600),
+            gravity: GameTuning.gravity,
+            powerFraction: 0.5
+        )
+
+        let trajectoryOutline = try XCTUnwrap(
+            indicator.childNode(withName: "aimTrajectoryOutline") as? SKShapeNode
+        )
+        let trajectoryFill = try XCTUnwrap(
+            indicator.childNode(withName: "aimTrajectoryFill") as? SKShapeNode
+        )
+        let powerOutline = try XCTUnwrap(
+            indicator.childNode(withName: "aimPowerOutline") as? SKShapeNode
+        )
+        let powerRing = try XCTUnwrap(
+            indicator.childNode(withName: "aimPowerRing") as? SKShapeNode
+        )
+
+        XCTAssertNotNil(trajectoryOutline.path, "the dark dots must be drawn too")
+        XCTAssertNotNil(powerOutline.path, "the dark ring must be drawn too")
+
+        // Each dark layer has to sit behind its bright twin and actually be dark.
+        XCTAssertLessThan(trajectoryOutline.zPosition, trajectoryFill.zPosition)
+        XCTAssertLessThan(powerOutline.zPosition, powerRing.zPosition)
+        XCTAssertLessThan(
+            trajectoryOutline.fillColor.brightnessComponentOrOne,
+            0.35
+        )
+        XCTAssertLessThan(
+            powerOutline.strokeColor.brightnessComponentOrOne,
+            0.35
+        )
+
+        // And the dark ring must be wide enough to show around the bright one.
+        XCTAssertGreaterThan(powerOutline.lineWidth, powerRing.lineWidth)
     }
 
     func testBottomDockInferenceAndFloor() {
@@ -270,5 +315,13 @@ final class AudioSynthesisTests: XCTestCase {
 
         XCTAssertLessThan(maximumStep, 0.025)
         XCTAssertLessThan(zeroCrossingCount, 60)
+    }
+}
+
+private extension NSColor {
+    /// `brightnessComponent` traps on colours outside a compatible space, and the
+    /// aim guide builds its colours with `withAlphaComponent`, so convert first.
+    var brightnessComponentOrOne: CGFloat {
+        (usingColorSpace(.deviceRGB) ?? .white).brightnessComponent
     }
 }

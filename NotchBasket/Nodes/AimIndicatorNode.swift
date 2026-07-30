@@ -2,15 +2,47 @@ import AppKit
 import SpriteKit
 
 final class AimIndicatorNode: SKNode {
+    private let trajectoryOutline = SKShapeNode()
     private let trajectoryNode = SKShapeNode()
+    private let powerOutline = SKShapeNode()
     private let powerNode = SKShapeNode()
 
     override init() {
         super.init()
         zPosition = 20
+
+        // The guide is drawn over whatever the user happens to have on screen and
+        // the app never samples the desktop, so a single tone cannot work: plain
+        // white vanished over white documents. Same dual-tone treatment the hoop
+        // uses — a dark silhouette carries the shape over light backgrounds, the
+        // bright fill carries it over dark ones.
+        trajectoryOutline.name = "aimTrajectoryOutline"
+        trajectoryOutline.lineCap = .round
+        trajectoryOutline.fillColor = NSColor.black.withAlphaComponent(0.55)
+        trajectoryOutline.strokeColor = NSColor.black.withAlphaComponent(0.62)
+        trajectoryOutline.lineWidth = 3.2
+        trajectoryOutline.zPosition = 0
+        addChild(trajectoryOutline)
+
+        trajectoryNode.name = "aimTrajectoryFill"
         trajectoryNode.lineCap = .round
+        trajectoryNode.strokeColor = .clear
+        trajectoryNode.zPosition = 1
         addChild(trajectoryNode)
+
+        powerOutline.name = "aimPowerOutline"
+        powerOutline.lineCap = .round
+        powerOutline.strokeColor = NSColor.black.withAlphaComponent(0.60)
+        powerOutline.lineWidth = 6
+        powerOutline.zPosition = 0
+        addChild(powerOutline)
+
+        powerNode.name = "aimPowerRing"
+        powerNode.lineCap = .round
+        powerNode.lineWidth = 3
+        powerNode.zPosition = 1
         addChild(powerNode)
+
         isHidden = true
     }
 
@@ -52,9 +84,9 @@ final class AimIndicatorNode: SKNode {
             ))
         }
 
+        trajectoryOutline.path = path
         trajectoryNode.path = path
-        trajectoryNode.fillColor = NSColor.white.withAlphaComponent(0.74)
-        trajectoryNode.strokeColor = .clear
+        trajectoryNode.fillColor = NSColor.white.withAlphaComponent(0.96)
 
         let ringRadius = GameTuning.ballDiameter * 0.63
         let powerPath = CGMutablePath()
@@ -65,17 +97,21 @@ final class AimIndicatorNode: SKNode {
             endAngle: -.pi / 2 + (2 * .pi * min(max(powerFraction, 0), 1)),
             clockwise: false
         )
+        powerOutline.path = powerPath
         powerNode.path = powerPath
+        // A saturated yellow at full power is bright, but it is also low-contrast
+        // against a white window; the dark outline behind it is what keeps the
+        // full-power cue readable rather than the hue itself.
         powerNode.strokeColor = powerFraction >= 0.98
             ? NSColor.systemYellow
-            : NSColor.white.withAlphaComponent(0.55)
-        powerNode.lineWidth = 3
-        powerNode.lineCap = .round
+            : NSColor.white.withAlphaComponent(0.94)
     }
 
     func hide() {
         isHidden = true
+        trajectoryOutline.path = nil
         trajectoryNode.path = nil
+        powerOutline.path = nil
         powerNode.path = nil
     }
 }
