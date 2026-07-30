@@ -245,6 +245,7 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         removeAction(forKey: "scheduledReset")
         resetController.reset()
         scoreController.resetForNewShot()
+        hoop?.resetNetForNewShot()
         if interruptedUnscoredShot, statistics.streak != 0 {
             statistics.streak = 0
             updateScoreOverlay()
@@ -527,6 +528,7 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         ball?.removeFromParent()
         resetController.reset()
         scoreController.resetForNewShot()
+        hoop?.resetNetForNewShot()
         didScoreCurrentShot = false
 
         let diameter = min(
@@ -626,10 +628,7 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         updateScoreOverlay()
         onStatisticsChanged?(statistics)
 
-        hoop?.playScoreAnimation(
-            reducedEffects: preferences.reducedEffects,
-            ballVelocity: ball?.physicsBody?.velocity ?? .zero
-        )
+        hoop?.playScoreAnimation(reducedEffects: preferences.reducedEffects)
         showScorePop()
         emitScoreParticles()
         audioService.play(.score, intensity: 0.9, preferences: preferences)

@@ -71,8 +71,7 @@ final class HoopNode: SKNode {
 
     /// The net is no longer animated on a score: the swish is whatever the ball
     /// actually did to the cords on its way through. Only the rim still flashes.
-    func playScoreAnimation(reducedEffects: Bool, ballVelocity: CGVector) {
-        _ = ballVelocity
+    func playScoreAnimation(reducedEffects: Bool) {
         rearRimVisual.removeAllActions()
         rimVisual.removeAllActions()
         if reducedEffects {
@@ -147,6 +146,12 @@ final class HoopNode: SKNode {
             y: corrected.y + netNode.position.y
         )
         return parent.convert(correctedHoopPoint, from: self)
+    }
+
+    /// Clears the net's escape latch for a fresh shot. See
+    /// `NetClothSimulation.resetForNewShot`.
+    func resetNetForNewShot() {
+        netNode.resetForNewShot()
     }
 
     private func buildMount() {
@@ -532,6 +537,10 @@ private final class NetMeshNode: SKNode {
             ballPosition: ballPosition,
             ballRadius: ballRadius
         )
+    }
+
+    func resetForNewShot() {
+        simulation.resetForNewShot()
     }
 
     private func render() {

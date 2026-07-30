@@ -64,6 +64,58 @@ final class GeometryTests: XCTestCase {
         XCTAssertGreaterThan(hoop.zPosition + frontRim.zPosition, ball.zPosition)
     }
 
+    /// The net simulation runs in the net's own local space, but the scene hands
+    /// it ball positions in scene space and applies the force it returns to the
+    /// ball. Every NetSimulationTests case drives the sim directly, so nothing
+    /// there would notice if HoopNode mapped the coordinates wrong — dropping the
+    /// netNode offset would put every contact ~80 points off with the suite still
+    /// green. This exercises the whole scene -> hoop -> net -> force path.
+    func testHoopMapsSceneContactIntoNetSpace() {
+        let scene = SKScene(size: CGSize(width: 800, height: 600))
+        let hoop = HoopNode()
+        hoop.position = CGPoint(x: 500, y: 400)
+        scene.addChild(hoop)
+
+        // A ball settling into the hem, expressed in SCENE coordinates. The net's
+        // hem sits at rimY - depth below the hoop's own origin, plus the net node's
+        // own offset of rimY - 2.
+        let hemInHoop = CGPoint(x: 0, y: (GameTuning.rimY - 2) + (-NetClothSimulation.depth + 6))
+        let hemInScene = CGPoint(
+            x: hoop.position.x + hemInHoop.x,
+            y: hoop.position.y + hemInHoop.y
+        )
+
+        let force = hoop.updateNet(
+            deltaTime: 1.0 / 60.0,
+            ballScenePosition: hemInScene,
+            ballVelocity: CGVector(dx: 0, dy: -600),
+            ballRadius: GameTuning.ballDiameter / 2,
+            reducedEffects: false
+        )
+
+        XCTAssertGreaterThan(
+            force.dy,
+            0,
+            "a ball at the hem, placed in scene space, must be pushed back up"
+        )
+
+        // The same ball a full net-width off to the side touches nothing: proof the
+        // mapping is not simply returning a force for any input.
+        let asideInScene = CGPoint(x: hemInScene.x + 400, y: hemInScene.y)
+        let farHoop = HoopNode()
+        farHoop.position = hoop.position
+        scene.addChild(farHoop)
+        let farForce = farHoop.updateNet(
+            deltaTime: 1.0 / 60.0,
+            ballScenePosition: asideInScene,
+            ballVelocity: CGVector(dx: 0, dy: -600),
+            ballRadius: GameTuning.ballDiameter / 2,
+            reducedEffects: false
+        )
+        XCTAssertEqual(farForce.dx, 0, accuracy: 0.001)
+        XCTAssertEqual(farForce.dy, 0, accuracy: 0.001)
+    }
+
     func testRealisticMountingAssemblyIsPresent() {
         let hoop = HoopNode()
 

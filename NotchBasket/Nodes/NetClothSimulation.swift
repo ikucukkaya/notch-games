@@ -94,9 +94,9 @@ final class NetClothSimulation {
     // than snapping back. Measured against 11 x 10, the dent stays local more
     // sharply (37.5x the far side, up from 17.6x) and a fast ball stretches the hem
     // more than twice as far, with cord stretch still under 0.1% — the cords are
-    // no less inextensible, there are simply more of them. Worst-case cost is
-    // ~168k constraint solves per frame at the substep cap; a typical frame is
-    // ~21k, which is nothing.
+    // no less inextensible, there are simply more of them. A typical frame runs
+    // the constraint solver ~21k times (1314 cords x 4 iterations x 4 integration
+    // steps); measured cost is well under 1 ms.
     static let rowCount = 13
     static let cordCount = 18
 
@@ -118,7 +118,9 @@ final class NetClothSimulation {
 
     /// Whether the ball has actually been inside the cone during this pass. The
     /// backstop exists only to recover a ball that slipped out through a cord, so
-    /// it has to know the ball was in there.
+    /// it has to know the ball was in there. Reset between shots via
+    /// `resetForNewShot()` — the latch normally self-clears when the ball leaves
+    /// the net, but a ball grabbed mid-flight never gets that frame.
     private var ballWasInsideCone = false
 
     // Cloth is solved by satisfying cord lengths rather than by integrating stiff
@@ -152,7 +154,7 @@ final class NetClothSimulation {
 
     private let substepDuration: CGFloat = 1.0 / 240.0
     private let maximumBallTravelPerSubstep: CGFloat = 4
-    private let maximumSubstepCount = 32
+    private let maximumContactSamples = 32
 
     // Forces handed to SKPhysicsBody.applyForce, written as multiples of the
     // ball's own weight. Absolute numbers here once let the net accelerate the
@@ -251,16 +253,6 @@ final class NetClothSimulation {
         }
     }
 
-    /// Swings one row sideways the way a ball entering off-centre would.
-    func swayRingForTesting(at row: Int, by amount: CGFloat) {
-        guard row > 0, row < Self.rowCount else { return }
-        for cord in 0..<Self.cordCount {
-            let i = index(row: row, cord: cord)
-            knots[i].position.x += amount
-            knots[i].previousPosition = knots[i].position
-        }
-    }
-
     // MARK: - Stepping
 
     func step(deltaTime: CGFloat) {
@@ -278,19 +270,27 @@ final class NetClothSimulation {
         guard time > 0 else { return .zero }
         let scale = min(max(responseScale, 0), 1)
 
-        var substepCount = max(1, Int(ceil(time / substepDuration)))
+        // Integration runs at a fixed rate, set only by elapsed time. This is
+        // what keeps damping, the constraint passes and the velocity the solver
+        // bleeds independent of how fast the ball happens to be moving — tying the
+        // substep count to ball travel once made the whole net roughly three times
+        // deader for the duration of every shot than it was tuned to be.
+        let integrationSteps = max(1, Int(ceil(time / substepDuration)))
+        let integrationStep = time / CGFloat(integrationSteps)
+
+        // The contact sweep is refined separately, and finely, so a fast shot
+        // cannot step the ball straight over the cords between frames. These are
+        // only extra samples of where the sphere is — they re-integrate nothing.
+        var contactSamples = integrationSteps
         if let contact {
             let travel = hypot(contact.velocity.dx, contact.velocity.dy) * time
-            substepCount = max(
-                substepCount,
+            contactSamples = max(
+                contactSamples,
                 Int(ceil(travel / maximumBallTravelPerSubstep))
             )
         }
-        substepCount = min(substepCount, maximumSubstepCount)
-        let substep = time / CGFloat(substepCount)
+        contactSamples = min(contactSamples, maximumContactSamples)
 
-        // Sweep the ball along its path so a fast shot cannot step over the cords
-        // between two display frames.
         let startPosition = contact.map {
             CGPoint(
                 x: $0.position.x - ($0.velocity.dx * time),
@@ -299,11 +299,23 @@ final class NetClothSimulation {
         }
 
         var accumulated = CGVector.zero
-        for substepIndex in 0..<substepCount {
-            var swept = contact
-            if let contact, let startPosition {
-                let progress = CGFloat(substepIndex + 1) / CGFloat(substepCount)
-                swept = NetRingContact(
+        var samplesDone = 0
+        for stepIndex in 0..<integrationSteps {
+            integrate(deltaTime: integrationStep)
+            for _ in 0..<constraintIterations {
+                solveCords()
+            }
+
+            // Resolve every contact sample that falls in this integration step.
+            // Contact is applied after the cords, not inside their loop: solving
+            // both together had them fighting several times per step, and Verlet
+            // reads each round of that fight as velocity.
+            guard let contact, contact.radius > 0, scale > 0,
+                  let startPosition else { continue }
+            let target = ((stepIndex + 1) * contactSamples) / integrationSteps
+            while samplesDone < target {
+                let progress = CGFloat(samplesDone + 1) / CGFloat(contactSamples)
+                let swept = NetRingContact(
                     position: CGPoint(
                         x: startPosition.x
                             + ((contact.position.x - startPosition.x) * progress),
@@ -313,22 +325,10 @@ final class NetClothSimulation {
                     velocity: contact.velocity,
                     radius: contact.radius
                 )
-            }
-
-            integrate(deltaTime: substep)
-            for _ in 0..<constraintIterations {
-                solveCords()
-                pinTopRow()
-            }
-
-            // Contact is resolved after the cords, not inside their loop. Solving
-            // both together had them fighting several times per substep, and each
-            // round of that fight was read as velocity.
-            if let swept, swept.radius > 0, scale > 0 {
                 let reaction = resolveBall(swept, responseScale: scale)
-                accumulated.dx += reaction.dx / CGFloat(substepCount)
-                accumulated.dy += reaction.dy / CGFloat(substepCount)
-                pinTopRow()
+                accumulated.dx += reaction.dx / CGFloat(contactSamples)
+                accumulated.dy += reaction.dy / CGFloat(contactSamples)
+                samplesDone += 1
             }
         }
 
@@ -364,6 +364,13 @@ final class NetClothSimulation {
     }
 
     // MARK: - Containment backstop
+
+    /// Clears the escape latch. Call when a new ball is spawned or the current
+    /// one is grabbed out of flight, so a stale "was inside the cone" never leaks
+    /// into the next shot and nudges a ball that merely passed the hoop.
+    func resetForNewShot() {
+        ballWasInsideCone = false
+    }
 
     /// The most the backstop may move the ball in one frame.
     static let maximumCorrectionPerFrame: CGFloat = 2

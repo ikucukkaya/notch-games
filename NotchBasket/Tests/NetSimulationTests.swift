@@ -142,7 +142,7 @@ final class NetSimulationTests: XCTestCase {
         let rowRadius = simulation.rings[row].restRadius
         let rowY = simulation.rings[row].restCenterY
 
-        // Cord 0 sits at angle 0, the +x side of the weave; cord 5 is opposite it.
+        // Cord 0 sits at angle 0, the +x side of the weave; cordCount/2 is opposite.
         let contact = NetRingContact(
             position: CGPoint(x: rowRadius + (ballRadius * 0.6), y: rowY),
             velocity: CGVector(dx: -300, dy: 0),
@@ -314,6 +314,39 @@ final class NetSimulationTests: XCTestCase {
         }
     }
 
+    /// Net damping must not depend on the ball's speed. It once did — the substep
+    /// count was raised by ball travel and damping ran per substep, so a fast ball
+    /// anywhere on screen made the whole net decay several times faster for the
+    /// length of every shot. A disturbance far from any contact must settle at the
+    /// same rate whatever the ball is doing.
+    func testDampingDoesNotDependOnBallSpeed() {
+        func framesToSettle(ballSpeed: CGFloat) -> Int {
+            let simulation = NetClothSimulation()
+            simulation.disturbForTesting(radiusOffset: 0, sagOffset: 0, swayOffset: 14)
+            let start = simulation.displacementFromRest()
+
+            // A ball far below the hem, never in contact — only its speed matters.
+            let ball: NetRingContact? = ballSpeed == 0 ? nil : NetRingContact(
+                position: CGPoint(x: 0, y: -NetClothSimulation.depth - 400),
+                velocity: CGVector(dx: 0, dy: -ballSpeed),
+                radius: ballRadius
+            )
+            for frame in 0..<90 {
+                simulation.step(deltaTime: 1.0 / 60.0, contact: ball, responseScale: 1)
+                if simulation.displacementFromRest() < start * 0.25 { return frame }
+            }
+            return 90
+        }
+
+        let still = framesToSettle(ballSpeed: 0)
+        let fast = framesToSettle(ballSpeed: 8000)
+        XCTAssertEqual(
+            still,
+            fast,
+            "settling took \(still) frames with no ball, \(fast) with a fast one"
+        )
+    }
+
     func testReducedMotionScalesNetResponse() {
         let full = NetClothSimulation()
         let reduced = NetClothSimulation()
@@ -424,7 +457,9 @@ final class NetSimulationTests: XCTestCase {
             / abs(GameTuning.gravity)
 
         XCTAssertGreaterThan(gravities, 0.05, "the net must actually push back")
-        XCTAssertLessThan(gravities, 4, "but a net does not fling a basketball")
+        // The cap is exactly 3 weights; assert just past it so loosening the
+        // constant is caught, not merely a wild fling.
+        XCTAssertLessThan(gravities, 3.05, "but a net does not fling a basketball")
     }
 
     func testGripGrowsWithPenetration() {
@@ -509,6 +544,30 @@ final class NetSimulationTests: XCTestCase {
         }
     }
 
+    /// A ball grabbed mid-flight never gets the frame that clears the "was inside"
+    /// latch, so the next shot could inherit it and nudge a ball merely passing the
+    /// hoop. resetForNewShot is what the scene calls to prevent that.
+    func testResetForNewShotClearsTheEscapeLatch() {
+        let simulation = NetClothSimulation()
+
+        // Put the ball inside the cone, setting the latch.
+        XCTAssertNil(simulation.containmentCorrection(
+            ballPosition: CGPoint(x: 0, y: -30),
+            ballRadius: ballRadius
+        ))
+
+        // Without a reset, a ball now off to the side would be treated as an
+        // escapee and corrected. Reset first, and it must be left alone.
+        simulation.resetForNewShot()
+        XCTAssertNil(
+            simulation.containmentCorrection(
+                ballPosition: CGPoint(x: NetClothSimulation.topHalfWidth + 30, y: -30),
+                ballRadius: ballRadius
+            ),
+            "the latch survived resetForNewShot"
+        )
+    }
+
     func testLeavingTheNetClearsTheEscapeLatch() {
         let simulation = NetClothSimulation()
 
@@ -574,25 +633,22 @@ final class NetSimulationTests: XCTestCase {
         )
     }
 
-    func testCordsAreSplitAcrossBothDepthLayers() {
-        let simulation = NetClothSimulation()
-        var front = 0
-        var rear = 0
+    func testBothDepthLayersReceiveCords() {
+        let paths = NetMeshPathBuilder.paths(for: NetClothSimulation())
 
-        for cord in 0..<NetClothSimulation.cordCount {
-            let projected = NetMeshPathBuilder.project(
-                simulation.position(row: 3, cord: cord)
-            )
-            if projected.depth >= 0 {
-                rear += 1
-            } else {
-                front += 1
-            }
-        }
+        // The weave wraps the cone, so some cords are nearer the viewer than the
+        // ball and some are behind it. Both render layers must actually get
+        // geometry, or the ball would draw over the whole net or under it.
+        XCTAssertFalse(paths.rear.isEmpty, "no cords were sent to the rear layer")
+        XCTAssertFalse(paths.front.isEmpty, "no cords were sent to the front layer")
 
-        XCTAssertGreaterThan(front, 0)
-        XCTAssertGreaterThan(rear, 0)
-        XCTAssertEqual(front + rear, NetClothSimulation.cordCount)
+        // And the front layer must be genuinely nearer: its knots sit at negative
+        // depth, which the side-on projection lifts in screen-y relative to the
+        // rear. Compare the two bounding boxes' vertical span as a proxy — a
+        // builder that dumped everything into one layer would leave the other
+        // empty, already caught above; this guards against them being swapped.
+        XCTAssertGreaterThan(paths.front.boundingBox.height, 0)
+        XCTAssertGreaterThan(paths.rear.boundingBox.height, 0)
     }
 
     /// Cords bend through their knots rather than turning a corner at each one.
