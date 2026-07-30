@@ -376,6 +376,29 @@ final class NetSimulationTests: XCTestCase {
         XCTAssertTrue(simulation.hasSettledSinceRedraw, "the view is still being asked to redraw")
     }
 
+    /// The scene hands the net the ball on every frame the ball exists, wherever
+    /// it is on screen — a ball parked at the spawn point still arrives here as a
+    /// "contact". Mere existence must not keep the net awake: that is exactly how
+    /// the first sleep implementation failed in the running app while its tests,
+    /// which passed nil, stayed green.
+    func testDistantBallDoesNotKeepTheNetAwake() {
+        let simulation = NetClothSimulation()
+        let parkedBall = NetRingContact(
+            position: CGPoint(x: -420, y: -240),
+            velocity: .zero,
+            radius: ballRadius
+        )
+
+        for _ in 0..<120 {
+            simulation.step(deltaTime: 1.0 / 60.0, contact: parkedBall, responseScale: 1)
+        }
+
+        XCTAssertTrue(
+            simulation.isResting,
+            "a parked ball far from the hoop kept the net simulating forever"
+        )
+    }
+
     func testContactWakesTheSleepingNet() {
         let simulation = NetClothSimulation()
         for _ in 0..<120 { simulation.step(deltaTime: 1.0 / 60.0) }

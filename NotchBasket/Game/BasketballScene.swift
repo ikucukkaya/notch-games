@@ -34,6 +34,15 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
     private let scoreController = ScoreController()
 
     private var resetController = BallResetController()
+    /// Consecutive update frames in which nothing on screen was moving. Once the
+    /// toy has been genuinely still for half a second, the view drops to a slow
+    /// render pace: SpriteKit otherwise composites the full-screen transparent
+    /// overlay 60 times a second forever, which alone held the idle app near half
+    /// a core. Any interaction or state change restores full pace immediately.
+    private var quiescentFrames = 0
+    private let idleFramesPerSecond = 10
+    private let quiescentFramesBeforeIdle = 30
+
     private var ballState: BallState = .spawning {
         didSet {
             updateDebugLabel()
@@ -223,7 +232,33 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         updateDebugLabel()
     }
 
+    private func updateRenderPace() {
+        // Quiescent means the shot cycle is at rest AND the net has fallen
+        // asleep. Every other state is animating something.
+        let quiescent = isGamePresented
+            && ballState == .ready
+            && (hoop?.isNetResting ?? false)
+        guard quiescent else {
+            quiescentFrames = 0
+            setPreferredFramesPerSecond(60)
+            return
+        }
+        quiescentFrames += 1
+        if quiescentFrames >= quiescentFramesBeforeIdle {
+            setPreferredFramesPerSecond(idleFramesPerSecond)
+        }
+    }
+
+    private func setPreferredFramesPerSecond(_ fps: Int) {
+        guard let view, view.preferredFramesPerSecond != fps else { return }
+        view.preferredFramesPerSecond = fps
+    }
+
     override func mouseDown(with event: NSEvent) {
+        // Restore full pace before handling the event, so a grab that starts an
+        // aim is fluid from its first frame rather than after the next slow tick.
+        setPreferredFramesPerSecond(60)
+
         guard isGamePresented, let point = scenePoint(for: event) else { return }
 
         if canBeginAim(at: point), let ball {
@@ -402,6 +437,8 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
                 interactingBall?.physicsBody?.applyForce(netForce)
             }
         }
+
+        updateRenderPace()
 
         guard isGamePresented, ballState == .flying || ballState == .scored, let ball else {
             velocityNode.path = nil

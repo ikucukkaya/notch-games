@@ -154,6 +154,12 @@ final class HoopNode: SKNode {
         netNode.resetForNewShot()
     }
 
+    /// Whether the net has settled and stopped simulating. The scene uses this to
+    /// drop the render pace when the whole toy is idle.
+    var isNetResting: Bool {
+        netNode.isResting
+    }
+
     private func buildMount() {
         let rimY = GameTuning.rimY
         let boardRearX = SideHoopLayout.backboardX +
@@ -545,6 +551,10 @@ private final class NetMeshNode: SKNode {
 
     func resetForNewShot() {
         simulation.resetForNewShot()
+    }
+
+    var isResting: Bool {
+        simulation.isResting
     }
 
     private func render() {

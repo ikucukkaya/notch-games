@@ -282,7 +282,20 @@ final class NetClothSimulation {
         guard time > 0 else { return .zero }
         let scale = min(max(responseScale, 0), 1)
 
-        // A contact always wakes the net; once awake it runs until it settles.
+        // The scene reports the ball on every frame the ball exists, wherever it
+        // is on screen — a ball parked at the spawn point is still handed in as a
+        // "contact". A ball that cannot reach the cloth during this step is no
+        // contact at all; without this gate, the mere existence of a ball kept the
+        // net awake (and paying the full contact sweep) forever, which is exactly
+        // how the first sleep implementation failed in the running app while its
+        // tests, which passed nil, stayed green.
+        var contact = contact
+        if let candidate = contact, !couldTouch(candidate, within: time) {
+            contact = nil
+        }
+
+        // A reachable contact always wakes the net; once awake it runs until it
+        // settles again.
         if contact != nil { isResting = false }
         guard !isResting else {
             hasSettledSinceRedraw = true
@@ -599,6 +612,24 @@ final class NetClothSimulation {
                 knots[cord.second].position = b.position - (correction * 0.5)
             }
         }
+    }
+
+    /// Cheap swept-bounds rejection: could this ball overlap any part of the
+    /// cloth during this step? The ball's path over the frame is a segment, so
+    /// its swept box against the cloth's padded rest box answers "possibly" —
+    /// the per-knot sphere test still decides "actually". Padding covers dents
+    /// in progress and the hem's sag.
+    private func couldTouch(
+        _ contact: NetRingContact,
+        within time: CGFloat
+    ) -> Bool {
+        let startX = contact.position.x - (contact.velocity.dx * time)
+        let startY = contact.position.y - (contact.velocity.dy * time)
+        let pad = contact.radius + 12
+        return max(startX, contact.position.x) + pad >= -Self.topHalfWidth
+            && min(startX, contact.position.x) - pad <= Self.topHalfWidth
+            && max(startY, contact.position.y) + pad >= -Self.depth - 8
+            && min(startY, contact.position.y) - pad <= 8
     }
 
     /// Pushes every knot the ball overlaps out to the ball's surface, and returns
