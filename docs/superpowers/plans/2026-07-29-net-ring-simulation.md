@@ -1,5 +1,16 @@
 # Net Ring Simulation Implementation Plan
 
+> **Superseded, 2026-07-30.** The ring model this document specifies shipped and
+> then proved unable to dent locally: with three degrees of freedom per row, a
+> ball pressing from one side could only shrink the whole loop and slide it away,
+> which read on screen as the ball passing through the mesh. The net is now a 3D
+> woven sheet of 234 knots in `NetClothSimulation.swift`. This document is kept
+> as the record of how the cone-of-revolution idea was arrived at — the geometry,
+> the hem proportion and the contact philosophy all carried over — but the
+> per-row simulation it describes no longer exists.
+
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace NotchBasket's split cloth/funnel/swish net with a single cone-of-revolution ring stack that couples to the ball in both directions.
