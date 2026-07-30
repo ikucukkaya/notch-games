@@ -562,6 +562,30 @@ final class NetSimulationTests: XCTestCase {
         )
     }
 
+    /// The backstop only exists to recover a ball that slipped through a cord. It
+    /// used to test the vertical span alone, so any ball crossing net height
+    /// anywhere on screen — a shot thrown straight up from the far side, say — was
+    /// treated as an escapee and pulled sideways.
+    func testBallFarFromTheNetIsNeverCorrected() {
+        let simulation = NetRingSimulation()
+        let ballRadius = GameTuning.ballDiameter / 2
+
+        // Sweep the full vertical span of the net at a lateral distance no shot
+        // could have reached from inside it.
+        for step in 0...20 {
+            let y = -NetRingSimulation.depth * CGFloat(step) / 20
+            for x in [-500.0, -120.0, 120.0, 500.0] as [CGFloat] {
+                XCTAssertNil(
+                    simulation.containmentCorrection(
+                        ballPosition: CGPoint(x: x, y: y),
+                        ballRadius: ballRadius
+                    ),
+                    "corrected a ball at (\(x), \(y)), which was never in the net"
+                )
+            }
+        }
+    }
+
     func testBallBelowTheNetIsReleased() {
         let simulation = NetRingSimulation()
         let bottom = simulation.rings[NetRingSimulation.ringCount - 1].restCenterY

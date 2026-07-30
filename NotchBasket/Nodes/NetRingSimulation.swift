@@ -318,6 +318,22 @@ final class NetRingSimulation {
         let ring = rings[index]
 
         let lateralOffset = ballPosition.x - ring.centerX
+
+        // A ball that was never inside the cone cannot have slipped out of it.
+        // Without this bound the vertical span alone qualifies, which makes the
+        // whole screen-wide strip at net height count as "inside the net": a ball
+        // thrown straight up from the far side of the screen got dragged two
+        // points sideways every frame it spent in that strip, worst of all near
+        // the apex where it lingers longest.
+        // The bound is the net's mouth plus how far a shot can travel in a single
+        // frame at the game's top speed: that is the furthest a ball could have
+        // got by genuinely slipping through a cord. Anything past it was
+        // somewhere else on the screen entirely.
+        let escapeReach = GameTuning.maximumLaunchSpeed / 60
+        guard abs(lateralOffset) <= Self.topHalfWidth + escapeReach else {
+            return nil
+        }
+
         let limit = ring.radius - (ballRadius * 0.25)
         guard abs(lateralOffset) > limit else { return nil }
 
