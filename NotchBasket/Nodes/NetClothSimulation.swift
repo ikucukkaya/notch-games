@@ -141,7 +141,13 @@ final class NetClothSimulation {
     /// free to settle anywhere its cord lengths allow, and the net would slowly
     /// drift out of the shape the hoop was drawn around.
     private let restAttraction: CGFloat = 22
-    private let damping: CGFloat = 0.984
+
+    /// How much motion survives each substep. Raised from 0.984 to soften the
+    /// net: after a ball brushes past, the weave keeps flowing for 57 frames
+    /// rather than 36, which is what reads as soft fabric rather than something
+    /// that snaps back to shape. Past about 0.994 it stops buying more flow and
+    /// starts letting hard contact throw knots above the rim.
+    private let damping: CGFloat = 0.988
     private let knotGravity: CGFloat = -26
 
     private let substepDuration: CGFloat = 1.0 / 240.0
