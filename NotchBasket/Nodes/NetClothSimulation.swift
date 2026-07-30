@@ -670,33 +670,24 @@ enum NetMeshPathBuilder {
         let rows = NetClothSimulation.rowCount
         let cordCount = NetClothSimulation.cordCount
 
-        // The attachment cord around the rim.
-        for cord in 0...cordCount {
-            let projected = project(
-                simulation.position(row: 0, cord: cord % cordCount)
-            )
-            if cord == 0 {
-                rear.move(to: projected.point)
-            } else {
-                rear.addLine(to: projected.point)
-            }
+        // The attachment cord around the rim, closed.
+        let rim = (0...cordCount).map { cord in
+            project(simulation.position(row: 0, cord: cord % cordCount))
         }
+        appendSmoothRuns(rim, rear: rear, front: front)
 
-        // The two diagonal cord families that make the diamond weave.
-        for row in 0..<(rows - 1) {
-            for cord in 0..<cordCount {
-                let upper = project(simulation.position(row: row, cord: cord))
-                let lowerRight = project(
-                    simulation.position(row: row + 1, cord: (cord + 1) % cordCount)
-                )
-                let lowerLeft = project(
-                    simulation.position(
-                        row: row + 1,
-                        cord: (cord + cordCount - 1) % cordCount
-                    )
-                )
-                appendCord(from: upper, to: lowerRight, rear: rear, front: front)
-                appendCord(from: upper, to: lowerLeft, rear: rear, front: front)
+        // Each cord of the weave is one continuous helix from the rim to the hem,
+        // not a row of separate stitches. Drawing whole chains is what lets them be
+        // curved: the same segments as before, but a cord now bends through its
+        // knots instead of turning a corner at each one.
+        for start in 0..<cordCount {
+            for direction in [1, -1] {
+                let chain = (0..<rows).map { row -> (point: CGPoint, depth: CGFloat) in
+                    let cord = ((start + (direction * row)) % cordCount + cordCount)
+                        % cordCount
+                    return project(simulation.position(row: row, cord: cord))
+                }
+                appendSmoothRuns(chain, rear: rear, front: front)
             }
         }
 
@@ -720,14 +711,60 @@ enum NetMeshPathBuilder {
         return (rear, front)
     }
 
-    private static func appendCord(
-        from start: (point: CGPoint, depth: CGFloat),
-        to end: (point: CGPoint, depth: CGFloat),
+    /// Splits a chain of knots wherever it crosses from the far side of the cone
+    /// to the near side, and draws each run as a smooth curve. A cord that winds
+    /// around the cone has to change render layer partway along, or it would be
+    /// drawn in front of the ball for its whole length.
+    private static func appendSmoothRuns(
+        _ chain: [(point: CGPoint, depth: CGFloat)],
         rear: CGMutablePath,
         front: CGMutablePath
     ) {
-        let target = start.depth + end.depth >= 0 ? rear : front
-        target.move(to: start.point)
-        target.addLine(to: end.point)
+        guard chain.count > 1 else { return }
+
+        var runStart = 0
+        var runIsRear = chain[0].depth + chain[1].depth >= 0
+        for index in 1..<chain.count {
+            let segmentIsRear = chain[index - 1].depth + chain[index].depth >= 0
+            if segmentIsRear != runIsRear {
+                appendSmoothCurve(
+                    Array(chain[runStart..<index]).map(\.point),
+                    to: runIsRear ? rear : front
+                )
+                // Overlap by one knot so the two runs meet rather than leaving a
+                // gap where the cord passes behind the rim.
+                runStart = index - 1
+                runIsRear = segmentIsRear
+            }
+        }
+        appendSmoothCurve(
+            Array(chain[runStart...]).map(\.point),
+            to: runIsRear ? rear : front
+        )
+    }
+
+    /// Draws a polyline as a curve that bends through its interior points instead
+    /// of turning a corner at each one: quadratic spans between the midpoints of
+    /// successive segments, with each knot as the control point it bends around.
+    private static func appendSmoothCurve(_ points: [CGPoint], to path: CGMutablePath) {
+        guard points.count > 1 else { return }
+        path.move(to: points[0])
+        guard points.count > 2 else {
+            path.addLine(to: points[1])
+            return
+        }
+
+        for index in 1..<points.count {
+            let midpoint = CGPoint(
+                x: (points[index - 1].x + points[index].x) / 2,
+                y: (points[index - 1].y + points[index].y) / 2
+            )
+            if index == 1 {
+                path.addLine(to: midpoint)
+            } else {
+                path.addQuadCurve(to: midpoint, control: points[index - 1])
+            }
+        }
+        path.addLine(to: points[points.count - 1])
     }
 }

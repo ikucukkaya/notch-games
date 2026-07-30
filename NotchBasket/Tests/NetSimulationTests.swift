@@ -595,6 +595,32 @@ final class NetSimulationTests: XCTestCase {
         XCTAssertEqual(front + rear, NetClothSimulation.cordCount)
     }
 
+    /// Cords bend through their knots rather than turning a corner at each one.
+    /// Straight segments read as a faceted cage however fine the weave gets, so
+    /// the paths have to actually contain curves.
+    func testCordsAreDrawnAsCurvesNotStraightSegments() {
+        let paths = NetMeshPathBuilder.paths(for: NetClothSimulation())
+
+        var curves = 0
+        var lines = 0
+        for path in [paths.rear, paths.front] {
+            path.applyWithBlock { element in
+                switch element.pointee.type {
+                case .addQuadCurveToPoint, .addCurveToPoint: curves += 1
+                case .addLineToPoint: lines += 1
+                default: break
+                }
+            }
+        }
+
+        XCTAssertGreaterThan(curves, 0, "the weave is drawn with no curves at all")
+        XCTAssertGreaterThan(
+            curves,
+            lines,
+            "most of the weave should bend — \(curves) curves against \(lines) lines"
+        )
+    }
+
     func testMeshPathsAreNonEmptyAndTrackKnotMotion() {
         let simulation = NetClothSimulation()
         let atRest = NetMeshPathBuilder.paths(for: simulation)
