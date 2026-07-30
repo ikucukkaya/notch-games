@@ -210,21 +210,32 @@ final class GeometryTests: XCTestCase {
     }
 
     func testHoopHeightIsClampedInsidePlayableScreen() {
+        let screenHeight: CGFloat = 900
+
         XCTAssertEqual(HoopHeightPolicy.clampedAnchorY(
             20,
             floorY: 80,
-            screenHeight: 900
+            screenHeight: screenHeight
         ), 260)
-        XCTAssertEqual(HoopHeightPolicy.clampedAnchorY(
-            1_000,
-            floorY: 80,
-            screenHeight: 900
-        ), 872)
         XCTAssertEqual(HoopHeightPolicy.clampedAnchorY(
             600,
             floorY: 80,
-            screenHeight: 900
+            screenHeight: screenHeight
         ), 600)
+
+        // Assert the property rather than the number: at the top of its range the
+        // backboard's upper edge — the highest part of the assembly — must still
+        // be on screen, and not pointlessly far below the edge either. Written
+        // this way the test survives the board changing size, and still fails if
+        // the ceiling stops accounting for it.
+        let highest = HoopHeightPolicy.clampedAnchorY(
+            1_000,
+            floorY: 80,
+            screenHeight: screenHeight
+        )
+        let boardTop = highest + SideHoopLayout.assemblyTopY
+        XCTAssertLessThan(boardTop, screenHeight)
+        XCTAssertGreaterThan(boardTop, screenHeight - 40)
     }
 
     func testMovingAndScoredBallsRemainGrabbable() {

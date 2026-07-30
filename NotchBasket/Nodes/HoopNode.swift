@@ -5,8 +5,18 @@ enum SideHoopLayout {
     static let mountEdgeX: CGFloat = 112
     static let backboardX: CGFloat = 84
     static let backboardWidth: CGFloat = 14
-    static let backboardHeight: CGFloat = 138
-    static let backboardCenterY: CGFloat = GameTuning.rimY + 25
+    static let backboardHeight: CGFloat = 165.6
+
+    /// The board grows upward only: its lower edge stays fixed relative to the
+    /// rim so the mounting hardware, the bracket and the rim keep the alignment
+    /// they were drawn with, and only the glass above the rim gets taller.
+    static let backboardBottomY: CGFloat = GameTuning.rimY - 44
+    static let backboardCenterY: CGFloat =
+        backboardBottomY + (backboardHeight / 2)
+
+    /// The highest point of the whole assembly, measured from the hoop's anchor.
+    /// `HoopHeightPolicy` needs it to keep the board on screen.
+    static let assemblyTopY: CGFloat = backboardCenterY + (backboardHeight / 2)
     static let outerRimX: CGFloat = -GameTuning.rimPostOffset
     static let attachedRimX: CGFloat = GameTuning.rimPostOffset
     static let rimDepth: CGFloat = 10
@@ -15,13 +25,19 @@ enum SideHoopLayout {
 }
 
 enum HoopHeightPolicy {
+    /// How much clear space to leave above the backboard at the top of the range.
+    static let topMargin: CGFloat = 12
+
     static func clampedAnchorY(
         _ proposedY: CGFloat,
         floorY: CGFloat,
         screenHeight: CGFloat
     ) -> CGFloat {
         let minimumY = floorY + 180
-        let maximumY = screenHeight - 28
+        // Derived from the backboard's upper edge rather than a bare constant:
+        // the board reaches above the anchor, so making it taller must not
+        // silently push it off the top of the display.
+        let maximumY = screenHeight - SideHoopLayout.assemblyTopY - topMargin
         return min(max(proposedY, minimumY), maximumY)
     }
 }
