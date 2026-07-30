@@ -5,7 +5,6 @@ enum SoundEffect: CaseIterable, Hashable {
     case bounce
     case rim
     case backboard
-    case score
     case deploy
     case retract
 }
@@ -200,7 +199,6 @@ final class AudioService {
         switch effect {
         case .bounce: duration = BasketballCourtBounceSynthesizer.duration
         case .rim, .backboard: duration = HoopImpactSynthesizer.duration
-        case .score: duration = 0.52
         case .deploy: duration = 0.30
         case .retract: duration = 0.24
         }
@@ -251,16 +249,6 @@ final class AudioService {
             case .rim, .backboard:
                 // Generated above by HoopImpactSynthesizer.
                 value = 0
-
-            case .score:
-                let swishShape = sin(.pi * min(max(normalizedTime, 0), 1))
-                let swish = noise * swishShape * exp(-2.1 * time) * 0.20
-                let firstTone = sin(2 * .pi * 660 * time) * exp(-7 * time) * 0.24
-                let delayedTime = max(time - 0.10, 0)
-                let secondTone = time >= 0.10
-                    ? sin(2 * .pi * 880 * delayedTime) * exp(-7 * delayedTime) * 0.24
-                    : 0
-                value = swish + firstTone + secondTone
 
             case .deploy:
                 let frequency = 180 + (520 * normalizedTime)

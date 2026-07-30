@@ -668,7 +668,6 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         hoop?.playScoreAnimation(reducedEffects: preferences.reducedEffects)
         showScorePop()
         emitScoreParticles()
-        audioService.play(.score, intensity: 0.9, preferences: preferences)
         hapticService.perform(.basket, preferences: preferences)
         if statistics.streak == statistics.bestStreak && statistics.streak > 1 {
             hapticService.perform(.bestStreak, preferences: preferences)
