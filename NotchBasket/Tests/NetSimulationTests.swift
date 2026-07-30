@@ -547,11 +547,19 @@ final class NetSimulationTests: XCTestCase {
 
     func testBallThatSlippedThroughTheSideIsNudgedBack() throws {
         let simulation = NetRingSimulation()
-        let escaped = CGPoint(x: NetRingSimulation.topHalfWidth + 30, y: -30)
+        let ballRadius = GameTuning.ballDiameter / 2
 
+        // The backstop only recovers a ball that was in the cone, so put it there
+        // first — this is the frame before the integrator loses it through a cord.
+        XCTAssertNil(simulation.containmentCorrection(
+            ballPosition: CGPoint(x: 0, y: -30),
+            ballRadius: ballRadius
+        ))
+
+        let escaped = CGPoint(x: NetRingSimulation.topHalfWidth + 30, y: -30)
         let correction = try XCTUnwrap(simulation.containmentCorrection(
             ballPosition: escaped,
-            ballRadius: GameTuning.ballDiameter / 2
+            ballRadius: ballRadius
         ))
 
         XCTAssertLessThan(correction.x, escaped.x)
@@ -584,6 +592,51 @@ final class NetSimulationTests: XCTestCase {
                 )
             }
         }
+    }
+
+    /// A ball dropping past the front of the hoop without ever entering it must be
+    /// left alone. This was the residual zigzag: the backstop guessed from
+    /// distance whether the ball could have escaped, and a near miss qualified.
+    func testBallFallingPastTheHoopIsNotNudged() {
+        let simulation = NetRingSimulation()
+        let ballRadius = GameTuning.ballDiameter / 2
+
+        // Just outside the rim's mouth, falling the whole depth of the net.
+        for step in 0...20 {
+            let y = -NetRingSimulation.depth * CGFloat(step) / 20
+            XCTAssertNil(
+                simulation.containmentCorrection(
+                    ballPosition: CGPoint(
+                        x: -(NetRingSimulation.topHalfWidth + 20),
+                        y: y
+                    ),
+                    ballRadius: ballRadius
+                ),
+                "nudged a ball that only fell past the hoop, at y \(y)"
+            )
+        }
+    }
+
+    /// Leaving the net's vertical span ends the pass, so a later ball cannot
+    /// inherit a stale "was inside" latch from an earlier shot.
+    func testLeavingTheNetClearsTheEscapeLatch() {
+        let simulation = NetRingSimulation()
+        let ballRadius = GameTuning.ballDiameter / 2
+
+        XCTAssertNil(simulation.containmentCorrection(
+            ballPosition: CGPoint(x: 0, y: -30),
+            ballRadius: ballRadius
+        ))
+        // Drops out of the bottom of the net.
+        XCTAssertNil(simulation.containmentCorrection(
+            ballPosition: CGPoint(x: 0, y: -NetRingSimulation.depth - 40),
+            ballRadius: ballRadius
+        ))
+        // A fresh ball crossing net height off to the side is not an escapee.
+        XCTAssertNil(simulation.containmentCorrection(
+            ballPosition: CGPoint(x: NetRingSimulation.topHalfWidth + 30, y: -30),
+            ballRadius: ballRadius
+        ))
     }
 
     func testBallBelowTheNetIsReleased() {

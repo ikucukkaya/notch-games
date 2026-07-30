@@ -72,6 +72,12 @@ final class NetRingSimulation {
 
     private(set) var rings: [NetRing] = []
 
+    /// Whether the ball has actually been inside the cone during this pass. The
+    /// backstop exists only to recover a ball that slipped out through a cord, so
+    /// it has to know the ball was in there. Guessing from distance instead meant
+    /// a ball merely falling past the front of the hoop got nudged sideways.
+    private var ballWasInsideCone = false
+
     // Stretch resists hardest because cords barely lengthen; sway is loosest
     // because the whole skirt can swing without any cord changing length.
     private let radiusStiffness: CGFloat = 260
@@ -307,7 +313,13 @@ final class NetRingSimulation {
         guard ballRadius > 0 else { return nil }
         guard let top = rings.first, let bottom = rings.last else { return nil }
         guard ballPosition.y <= top.centerY,
-              ballPosition.y >= bottom.centerY else { return nil }
+              ballPosition.y >= bottom.centerY else {
+            // Above the rim or below the hem: this pass is over, whatever happened
+            // during it. A ball that legitimately dropped out of the bottom and a
+            // ball that never arrived both end up here.
+            ballWasInsideCone = false
+            return nil
+        }
 
         let fraction = (top.centerY - ballPosition.y)
             / max(top.centerY - bottom.centerY, 0.001)
@@ -325,17 +337,16 @@ final class NetRingSimulation {
         // thrown straight up from the far side of the screen got dragged two
         // points sideways every frame it spent in that strip, worst of all near
         // the apex where it lingers longest.
-        // The bound is the net's mouth plus how far a shot can travel in a single
-        // frame at the game's top speed: that is the furthest a ball could have
-        // got by genuinely slipping through a cord. Anything past it was
-        // somewhere else on the screen entirely.
-        let escapeReach = GameTuning.maximumLaunchSpeed / 60
-        guard abs(lateralOffset) <= Self.topHalfWidth + escapeReach else {
+        let limit = ring.radius - (ballRadius * 0.25)
+        if abs(lateralOffset) <= limit {
+            ballWasInsideCone = true
             return nil
         }
 
-        let limit = ring.radius - (ballRadius * 0.25)
-        guard abs(lateralOffset) > limit else { return nil }
+        // Outside the cords but never inside them — a ball falling past the front
+        // of the hoop, or crossing net height somewhere else on screen entirely.
+        // Nothing to recover.
+        guard ballWasInsideCone else { return nil }
 
         let target = ring.centerX + (limit * (lateralOffset >= 0 ? 1 : -1))
         let step = min(
