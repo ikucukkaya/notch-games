@@ -67,6 +67,9 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
     private var isNotchDropInProgress = false
 
     private let shotClock = ShotClockController()
+    private var pendingShotPoints = 2
+    private let threePointMarking = SKNode()
+    private var lastThreePointLineX: CGFloat = .nan
     private var activePlayMode: PlayMode = .free
     private var lastClockText = ""
     private let idleFramesPerSecond = 10
@@ -280,6 +283,40 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
             isNotchDropInProgress = false
             ballState = .ready
         }
+    }
+
+    /// The little court marking on the floor where the three-point zone begins.
+    /// Everything left of it is a three; the marking itself stands on the two side.
+    private func buildThreePointMarking() {
+        threePointMarking.removeFromParent()
+        threePointMarking.removeAllChildren()
+        threePointMarking.zPosition = 6
+        addChild(threePointMarking)
+
+        let contrast = SKShapeNode(rectOf: CGSize(width: 6, height: 16), cornerRadius: 2)
+        contrast.fillColor = NSColor.black.withAlphaComponent(0.72)
+        contrast.strokeColor = NSColor.black.withAlphaComponent(0.66)
+        contrast.lineWidth = 2
+        contrast.position = CGPoint(x: 0, y: 8)
+        threePointMarking.addChild(contrast)
+
+        let line = SKShapeNode(rectOf: CGSize(width: 2.6, height: 13), cornerRadius: 1.3)
+        line.fillColor = NSColor.white.withAlphaComponent(0.85)
+        line.strokeColor = .clear
+        line.position = CGPoint(x: 0, y: 8)
+        threePointMarking.addChild(line)
+
+        updateThreePointMarking()
+    }
+
+    private func updateThreePointMarking() {
+        let lineX = ScoringPolicy.threePointLineX(
+            leftBoundaryX: geometry.leftBoundaryX,
+            rimCenterX: currentHoopAnchor.x
+        )
+        guard lineX != lastThreePointLineX else { return }
+        lastThreePointLineX = lineX
+        threePointMarking.position = CGPoint(x: lineX, y: geometry.floorY)
     }
 
     private func updateShotClock() {
@@ -516,6 +553,13 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         ball.physicsBody?.affectedByGravity = true
         ball.physicsBody?.velocity = velocity
         ball.physicsBody?.angularVelocity = -velocity.dx / max(ball.radius, 1) * 0.035
+        pendingShotPoints = ScoringPolicy.points(
+            releaseX: ball.position.x,
+            threePointLineX: ScoringPolicy.threePointLineX(
+                leftBoundaryX: geometry.leftBoundaryX,
+                rimCenterX: currentHoopAnchor.x
+            )
+        )
         ballState = .flying
         resetController.beginShot(at: currentTime)
 
@@ -554,6 +598,7 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         }
 
         updateNotchDrop()
+        updateThreePointMarking()
         updateShotClock()
         updateRenderPace()
 
@@ -635,6 +680,7 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         addChild(hoop)
 
         addChild(aimIndicator)
+        buildThreePointMarking()
         buildScoreOverlay()
         buildDebugLayer()
         statistics.bestStreak = preferences.bestStreak
@@ -797,13 +843,13 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         guard !didScoreCurrentShot else { return }
         didScoreCurrentShot = true
         ballState = .scored
-        statistics.score += 1
+        statistics.score += pendingShotPoints
         statistics.streak += 1
         statistics.successfulShots += 1
         statistics.bestStreak = max(statistics.bestStreak, statistics.streak)
         preferences.registerBasket(streak: statistics.streak)
         if preferences.playMode == .shotClock24 {
-            shotClock.registerScore(at: currentTime)
+            shotClock.registerScore(points: pendingShotPoints, at: currentTime)
         }
         updateScoreOverlay()
         onStatisticsChanged?(statistics)
@@ -980,7 +1026,9 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         let label = SKLabelNode(
             fontNamed: NSFont.systemFont(ofSize: 28, weight: .bold).fontName
         )
-        label.text = statistics.streak >= 3 ? "+1  \(statistics.streak)x" : "+1"
+        label.text = statistics.streak >= 3
+            ? "+\(pendingShotPoints)  \(statistics.streak)x"
+            : "+\(pendingShotPoints)"
         label.fontSize = statistics.streak >= 3 ? 24 : 28
         label.fontColor = .white
         label.position = CGPoint(x: hoop.position.x, y: hoop.position.y + GameTuning.rimY + 34)

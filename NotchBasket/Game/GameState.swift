@@ -88,11 +88,11 @@ final class ShotClockController {
         deadline = now + Self.duration
     }
 
-    /// A basket: one point and a fresh 24 — including a buzzer-beater, which is
-    /// precisely a basket scored after the deadline passed.
-    func registerScore(at now: TimeInterval) {
+    /// A basket: its point value and a fresh 24 — including a buzzer-beater,
+    /// which is precisely a basket scored after the deadline passed.
+    func registerScore(points: Int, at now: TimeInterval) {
         guard isRunning else { return }
-        runScore += 1
+        runScore += points
         isAwaitingBuzzerBeater = false
         deadline = now + Self.duration
     }
@@ -131,5 +131,27 @@ final class ShotClockController {
         runScore = 0
         isAwaitingBuzzerBeater = false
         deadline = nil
+    }
+}
+
+
+/// Two- and three-point scoring. What counts is where the shot was *released* —
+/// the shooter's feet, not where the ball lands — and the hoop hangs on the
+/// right, so smaller x means farther out. On the line is two, as in the NBA.
+enum ScoringPolicy {
+    /// The three-point line's distance from the rim, as a fraction of the
+    /// playable depth between the left boundary and the rim: the NBA arc sits
+    /// 23.75 ft from the basket on a 47 ft half court.
+    static let threePointDepthFraction: CGFloat = 23.75 / 47
+
+    static func threePointLineX(
+        leftBoundaryX: CGFloat,
+        rimCenterX: CGFloat
+    ) -> CGFloat {
+        rimCenterX - ((rimCenterX - leftBoundaryX) * threePointDepthFraction)
+    }
+
+    static func points(releaseX: CGFloat, threePointLineX: CGFloat) -> Int {
+        releaseX < threePointLineX ? 3 : 2
     }
 }

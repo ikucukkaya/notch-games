@@ -63,16 +63,16 @@ final class ShotClockTests: XCTestCase {
         let clock = ShotClockController()
         clock.ballGrabbed(at: 100)
 
-        clock.registerScore(at: 110)
+        clock.registerScore(points: 3, at: 110)
 
-        XCTAssertEqual(clock.runScore, 1)
+        XCTAssertEqual(clock.runScore, 3)
         XCTAssertEqual(clock.remaining(at: 110), 24, accuracy: 0.001)
     }
 
     func testScoreBeforeTheClockStartsCountsNothing() {
         let clock = ShotClockController()
 
-        clock.registerScore(at: 100)
+        clock.registerScore(points: 2, at: 100)
 
         XCTAssertEqual(clock.runScore, 0)
         XCTAssertFalse(clock.isRunning)
@@ -101,8 +101,8 @@ final class ShotClockTests: XCTestCase {
         XCTAssertTrue(clock.isAwaitingBuzzerBeater)
 
         // It drops: the point counts and a fresh 24 starts.
-        clock.registerScore(at: 125)
-        XCTAssertEqual(clock.runScore, 1)
+        clock.registerScore(points: 2, at: 125)
+        XCTAssertEqual(clock.runScore, 2)
         XCTAssertFalse(clock.isAwaitingBuzzerBeater)
         XCTAssertEqual(clock.remaining(at: 125), 24, accuracy: 0.001)
     }
@@ -110,12 +110,12 @@ final class ShotClockTests: XCTestCase {
     func testEndRunReportsTheScoreAndDisarms() {
         let clock = ShotClockController()
         clock.ballGrabbed(at: 100)
-        clock.registerScore(at: 105)
-        clock.registerScore(at: 112)
+        clock.registerScore(points: 2, at: 105)
+        clock.registerScore(points: 3, at: 112)
 
         let finished = clock.endRun(at: 140, ballHeld: false)
 
-        XCTAssertEqual(finished, 2)
+        XCTAssertEqual(finished, 5)
         XCTAssertEqual(clock.runScore, 0)
         XCTAssertFalse(clock.isRunning)
         XCTAssertEqual(clock.remaining(at: 140), 24, accuracy: 0.001)
@@ -136,12 +136,34 @@ final class ShotClockTests: XCTestCase {
     func testModeChangeWipesTheRunWithoutRecordingIt() {
         let clock = ShotClockController()
         clock.ballGrabbed(at: 100)
-        clock.registerScore(at: 105)
+        clock.registerScore(points: 2, at: 105)
 
         clock.resetAbandoningRun()
 
         XCTAssertEqual(clock.runScore, 0)
         XCTAssertFalse(clock.isRunning)
         XCTAssertFalse(clock.isAwaitingBuzzerBeater)
+    }
+}
+
+
+final class ScoringPolicyTests: XCTestCase {
+    func testThreePointLineSitsAtTheNBAFractionOfPlayableDepth() {
+        // Rim at 1600, left boundary at 250: 1350 of playable depth.
+        let line = ScoringPolicy.threePointLineX(
+            leftBoundaryX: 250,
+            rimCenterX: 1_600
+        )
+
+        XCTAssertEqual(line, 1_600 - (1_350 * 23.75 / 47), accuracy: 0.001)
+        XCTAssertGreaterThan(line, 250)
+        XCTAssertLessThan(line, 1_600)
+    }
+
+    func testReleaseBeyondTheLineIsThreeAndInsideOrOnItIsTwo() {
+        XCTAssertEqual(ScoringPolicy.points(releaseX: 400, threePointLineX: 900), 3)
+        XCTAssertEqual(ScoringPolicy.points(releaseX: 1_200, threePointLineX: 900), 2)
+        // Standing on the line is a two, as in the NBA.
+        XCTAssertEqual(ScoringPolicy.points(releaseX: 900, threePointLineX: 900), 2)
     }
 }
