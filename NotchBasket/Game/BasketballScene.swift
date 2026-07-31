@@ -260,22 +260,17 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
     private func updateNotchDrop() {
         guard isNotchDropInProgress, ballState == .spawning, let ball else { return }
 
-        // Clear of the ceiling line: give the ball its boundaries back.
+        // Clear of the ceiling line: give the ball its boundaries back — and give
+        // the ball to the player in the same moment. A falling ball is already
+        // obeying the same physics a thrown one does, so there is no reason to
+        // make the player wait for it to land; catching it out of the air and
+        // firing is part of the toy.
         if let notchRect = geometry.notchRect,
            ball.position.y < notchRect.minY - ball.radius,
            let body = ball.physicsBody,
            body.collisionBitMask & PhysicsCategory.boundary == 0 {
             body.collisionBitMask |= PhysicsCategory.boundary
             body.contactTestBitMask |= PhysicsCategory.boundary
-        }
-
-        // Landed and still: the drop is over and the ball is the player's.
-        let speed = (ball.physicsBody?.velocity ?? .zero).length
-        let restored = (ball.physicsBody?.collisionBitMask ?? 0)
-            & PhysicsCategory.boundary != 0
-        if restored,
-           speed < GameTuning.stillSpeedThreshold,
-           ball.position.y < geometry.floorY + ball.radius + 6 {
             isNotchDropInProgress = false
             ballState = .ready
         }
@@ -283,9 +278,14 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
 
     private func updateRenderPace() {
         // Quiescent means the shot cycle is at rest AND the net has fallen
-        // asleep. Every other state is animating something.
+        // asleep AND the ball itself is still. The last condition is not implied
+        // by .ready any more: a ball dropping out of the notch becomes the
+        // player's the moment it clears the notch, mid-fall.
+        let ballIsStill = (ball?.physicsBody?.velocity ?? .zero).length
+            < GameTuning.stillSpeedThreshold
         let quiescent = isGamePresented
             && ballState == .ready
+            && ballIsStill
             && (hoop?.isNetResting ?? false)
         guard quiescent else {
             quiescentFrames = 0
