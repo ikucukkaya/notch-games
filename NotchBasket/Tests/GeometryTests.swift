@@ -251,7 +251,7 @@ final class GeometryTests: XCTestCase {
             accuracy: 0.001,
             "the panel must hang from the notch's lower edge"
         )
-        XCTAssertLessThan(panel.width, notch.width)
+        XCTAssertEqual(panel.width, notch.width, accuracy: 0.001)
         XCTAssertGreaterThanOrEqual(panel.width, 120)
     }
 

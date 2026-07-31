@@ -138,7 +138,7 @@ final class ShotClockTests: XCTestCase {
         clock.ballGrabbed(at: 100)
         clock.registerScore(at: 105)
 
-        clock.resetForModeChange()
+        clock.resetAbandoningRun()
 
         XCTAssertEqual(clock.runScore, 0)
         XCTAssertFalse(clock.isRunning)

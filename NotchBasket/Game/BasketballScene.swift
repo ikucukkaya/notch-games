@@ -7,10 +7,10 @@ import SpriteKit
 /// as the jumbotron housing.
 enum ScoreboardLayout {
     static let height: CGFloat = 40
-    static let inset: CGFloat = 24
 
     static func panelFrame(notchRect: CGRect) -> CGRect {
-        let width = max(notchRect.width - (inset * 2), 120)
+        // Full notch width: the panel and the housing above it read as one unit.
+        let width = max(notchRect.width, 120)
         return CGRect(
             x: notchRect.midX - (width / 2),
             y: notchRect.minY - height,
@@ -245,6 +245,8 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
 
     func restartSession() {
         statistics = SessionStatistics(bestStreak: preferences.bestStreak)
+        shotClock.resetAbandoningRun()
+        lastClockText = ""
         onStatisticsChanged?(statistics)
         updateScoreOverlay()
         resetBall(immediately: true)
@@ -287,7 +289,7 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         // board for the new mode's layout.
         if activePlayMode != preferences.playMode {
             activePlayMode = preferences.playMode
-            shotClock.resetForModeChange()
+            shotClock.resetAbandoningRun()
             buildScoreOverlay()
             updateScoreOverlay()
         }
@@ -963,7 +965,7 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
             scoreLabel.text = remaining < 5
                 ? String(format: "%.1f", remaining)
                 : "\(Int(remaining.rounded(.up)))"
-            streakLabel.text = "Run \(shotClock.runScore)"
+            streakLabel.text = "Point \(shotClock.runScore)"
             bestLabel.text = "Best \(preferences.bestShotClockRun)"
         } else {
             scoreLabel.text = "Score  \(statistics.score)"

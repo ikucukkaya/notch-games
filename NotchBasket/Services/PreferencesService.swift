@@ -96,7 +96,7 @@ final class PreferencesService: ObservableObject {
             Key.reducedEffects: false,
             Key.showDockIcon: false,
             Key.bestStreak: 0,
-            Key.playMode: PlayMode.free.rawValue,
+            Key.playMode: PlayMode.shotClock24.rawValue,
             Key.bestShotClockRun: 0,
             Key.lifetimeBaskets: 0,
             Key.lifetimeShots: 0,

@@ -125,8 +125,9 @@ final class ShotClockController {
         return finished
     }
 
-    /// Leaving or re-entering the mode wipes the run without recording it.
-    func resetForModeChange() {
+    /// Wipes the run without recording it: mode changes and session restarts
+    /// both abandon the possession rather than scoring it.
+    func resetAbandoningRun() {
         runScore = 0
         isAwaitingBuzzerBeater = false
         deadline = nil
