@@ -1011,9 +1011,14 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
             scoreLabel.text = remaining < 5
                 ? String(format: "%.1f", remaining)
                 : "\(Int(remaining.rounded(.up)))"
+            // Urgency reads at a glance: the readout turns red from 10 down.
+            // Derived every update rather than painted on an event, so a fresh
+            // 24 — basket, restart, mode change — goes back to white by itself.
+            scoreLabel.fontColor = remaining <= 10 ? .systemRed : .white
             streakLabel.text = "Point \(shotClock.runScore)"
             bestLabel.text = "Best \(preferences.bestShotClockRun)"
         } else {
+            scoreLabel.fontColor = .white
             scoreLabel.text = "Score  \(statistics.score)"
             streakLabel.text = "Streak \(statistics.streak)"
             bestLabel.text = "Best \(max(statistics.bestStreak, preferences.bestStreak))"
