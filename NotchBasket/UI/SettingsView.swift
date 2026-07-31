@@ -31,6 +31,12 @@ struct SettingsView: View {
 
     private var gameplaySection: some View {
         settingsGroup("Gameplay") {
+            Picker("Mode", selection: $preferences.playMode) {
+                ForEach(PlayMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+
             Toggle("Show aim guide", isOn: $preferences.aimGuideEnabled)
                 .onChange(of: preferences.aimGuideEnabled) { _, _ in onGameplayPreferenceChanged() }
 

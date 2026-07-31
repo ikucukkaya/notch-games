@@ -65,6 +65,10 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
     /// otherwise it would land on the ceiling from outside, or fire a phantom
     /// boundary thud crossing the line.
     private var isNotchDropInProgress = false
+
+    private let shotClock = ShotClockController()
+    private var activePlayMode: PlayMode = .free
+    private var lastClockText = ""
     private let idleFramesPerSecond = 10
     private let quiescentFramesBeforeIdle = 30
 
@@ -276,6 +280,61 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         }
     }
 
+    private func updateShotClock() {
+        guard isGamePresented else { return }
+
+        // Switching modes wipes the run without recording it and redraws the
+        // board for the new mode's layout.
+        if activePlayMode != preferences.playMode {
+            activePlayMode = preferences.playMode
+            shotClock.resetForModeChange()
+            buildScoreOverlay()
+            updateScoreOverlay()
+        }
+        guard activePlayMode == .shotClock24 else { return }
+
+        let ballInFlight = ballState == .flying || ballState == .scored
+        if shotClock.checkExpiry(at: currentTime, ballInFlight: ballInFlight)
+            == .violation {
+            performShotClockViolation(ballHeld: ballState == .aiming)
+        }
+
+        // NBA-style readout: whole seconds until the last five, then tenths.
+        let remaining = shotClock.remaining(at: currentTime)
+        let text = remaining < 5
+            ? String(format: "%.1f", remaining)
+            : "\(Int(remaining.rounded(.up)))"
+        if text != lastClockText {
+            lastClockText = text
+            updateScoreOverlay()
+        }
+    }
+
+    private func performShotClockViolation(ballHeld: Bool) {
+        let run = shotClock.endRun(at: currentTime, ballHeld: ballHeld)
+        preferences.registerShotClockRun(run)
+        audioService.play(.buzzer, intensity: 0.9, preferences: preferences)
+        hapticService.perform(.basket, preferences: preferences)
+
+        // The horn also ends the streak story: a violation is a turnover.
+        statistics.streak = 0
+        updateScoreOverlay()
+        onStatisticsChanged?(statistics)
+
+        scoreOverlay.removeAction(forKey: "violationFlash")
+        let flash = SKAction.sequence([
+            .run { [weak self] in
+                self?.scoreOverlay.childNode(withName: "notchScoreboardVisual")?
+                    .run(.sequence([
+                        .colorize(with: .systemRed, colorBlendFactor: 0.55, duration: 0.08),
+                        .colorize(withColorBlendFactor: 0, duration: 0.5)
+                    ]))
+            },
+            .wait(forDuration: 0.6)
+        ])
+        scoreOverlay.run(flash, withKey: "violationFlash")
+    }
+
     private func updateRenderPace() {
         // Quiescent means the shot cycle is at rest AND the net has fallen
         // asleep AND the ball itself is still. The last condition is not implied
@@ -287,6 +346,7 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
             && ballState == .ready
             && ballIsStill
             && (hoop?.isNetResting ?? false)
+            && !shotClock.isRunning
         guard quiescent else {
             quiescentFrames = 0
             setPreferredFramesPerSecond(60)
@@ -334,6 +394,10 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
             statistics.streak = 0
             updateScoreOverlay()
             onStatisticsChanged?(statistics)
+        }
+
+        if preferences.playMode == .shotClock24 {
+            shotClock.ballGrabbed(at: currentTime)
         }
 
         ballState = .aiming
@@ -488,6 +552,7 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         }
 
         updateNotchDrop()
+        updateShotClock()
         updateRenderPace()
 
         guard isGamePresented, ballState == .flying || ballState == .scored, let ball else {
@@ -674,6 +739,9 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
 
     private func finishShot(reason: ShotCompletionReason) {
         guard ballState == .flying || ballState == .scored else { return }
+        if !didScoreCurrentShot, shotClock.isAwaitingBuzzerBeater {
+            performShotClockViolation(ballHeld: false)
+        }
         switch reason {
         case .leftPlayableRegion:
             scheduleReset()
@@ -732,6 +800,9 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         statistics.successfulShots += 1
         statistics.bestStreak = max(statistics.bestStreak, statistics.streak)
         preferences.registerBasket(streak: statistics.streak)
+        if preferences.playMode == .shotClock24 {
+            shotClock.registerScore(at: currentTime)
+        }
         updateScoreOverlay()
         onStatisticsChanged?(statistics)
 
@@ -887,9 +958,18 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func updateScoreOverlay() {
-        scoreLabel.text = "Score  \(statistics.score)"
-        streakLabel.text = "Streak \(statistics.streak)"
-        bestLabel.text = "Best \(max(statistics.bestStreak, preferences.bestStreak))"
+        if preferences.playMode == .shotClock24 {
+            let remaining = shotClock.remaining(at: currentTime)
+            scoreLabel.text = remaining < 5
+                ? String(format: "%.1f", remaining)
+                : "\(Int(remaining.rounded(.up)))"
+            streakLabel.text = "Run \(shotClock.runScore)"
+            bestLabel.text = "Best \(preferences.bestShotClockRun)"
+        } else {
+            scoreLabel.text = "Score  \(statistics.score)"
+            streakLabel.text = "Streak \(statistics.streak)"
+            bestLabel.text = "Best \(max(statistics.bestStreak, preferences.bestStreak))"
+        }
         scoreOverlay.isHidden = !preferences.showScore
     }
 

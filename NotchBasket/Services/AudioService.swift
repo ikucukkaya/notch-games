@@ -5,6 +5,7 @@ enum SoundEffect: CaseIterable, Hashable {
     case bounce
     case rim
     case backboard
+    case buzzer
     case deploy
     case retract
 }
@@ -199,6 +200,7 @@ final class AudioService {
         switch effect {
         case .bounce: duration = BasketballCourtBounceSynthesizer.duration
         case .rim, .backboard: duration = HoopImpactSynthesizer.duration
+        case .buzzer: duration = 0.72
         case .deploy: duration = 0.30
         case .retract: duration = 0.24
         }
@@ -249,6 +251,18 @@ final class AudioService {
             case .rim, .backboard:
                 // Generated above by HoopImpactSynthesizer.
                 value = 0
+
+            case .buzzer:
+                // An arena horn: a rough, square-ish stack of odd harmonics with
+                // a close detuned pair for beating, held flat and released fast.
+                let horn =
+                    sin(2 * .pi * 311 * time) * 0.42 +
+                    sin(2 * .pi * 317 * time) * 0.34 +
+                    sin(2 * .pi * 933 * time) * 0.20 +
+                    sin(2 * .pi * 1_555 * time) * 0.09
+                let attack = min(time / 0.006, 1)
+                let release = min(max((duration - time) / 0.06, 0), 1)
+                value = horn * attack * release * 0.8
 
             case .deploy:
                 let frequency = 180 + (520 * normalizedTime)

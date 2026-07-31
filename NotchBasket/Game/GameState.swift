@@ -40,3 +40,95 @@ struct SessionStatistics: Equatable {
         return Double(successfulShots) / Double(shotsAttempted)
     }
 }
+
+
+/// Which game is being played. `free` is the original toy; `shotClock24` is the
+/// NBA-style possession game: 24 seconds to score, a basket buys a fresh 24,
+/// and an expired clock ends the run.
+enum PlayMode: String, CaseIterable, Identifiable {
+    case free
+    case shotClock24
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .free: "Free play"
+        case .shotClock24: "24 Seconds"
+        }
+    }
+}
+
+/// The 24-second clock's rules, kept pure and time-injected so every rule is
+/// testable without a scene. The scene owns *when* things happen (grabs, scores,
+/// shot resolutions) and asks this controller what they mean.
+final class ShotClockController {
+    static let duration: TimeInterval = 24
+
+    private(set) var deadline: TimeInterval?
+    private(set) var runScore = 0
+
+    /// The clock expired while a shot was in the air. NBA rule: a ball released
+    /// before the buzzer still counts if it goes in — so the run's fate rides on
+    /// that shot instead of ending at the horn.
+    private(set) var isAwaitingBuzzerBeater = false
+
+    var isRunning: Bool { deadline != nil }
+
+    /// Full 24 while armed; the live remainder once running; never negative.
+    func remaining(at now: TimeInterval) -> TimeInterval {
+        guard let deadline else { return Self.duration }
+        return max(deadline - now, 0)
+    }
+
+    /// The clock does not start with the game — it starts the first time the
+    /// player takes the ball. Later grabs in the same run change nothing.
+    func ballGrabbed(at now: TimeInterval) {
+        guard deadline == nil else { return }
+        deadline = now + Self.duration
+    }
+
+    /// A basket: one point and a fresh 24 — including a buzzer-beater, which is
+    /// precisely a basket scored after the deadline passed.
+    func registerScore(at now: TimeInterval) {
+        guard isRunning else { return }
+        runScore += 1
+        isAwaitingBuzzerBeater = false
+        deadline = now + Self.duration
+    }
+
+    enum Expiry: Equatable {
+        case none
+        case awaitingShot
+        case violation
+    }
+
+    /// Poll once per frame. A ball in flight defers the verdict to that shot;
+    /// a held or resting ball at zero is a violation on the spot.
+    func checkExpiry(at now: TimeInterval, ballInFlight: Bool) -> Expiry {
+        guard let deadline, now >= deadline else { return .none }
+        if ballInFlight {
+            isAwaitingBuzzerBeater = true
+            return .awaitingShot
+        }
+        return .violation
+    }
+
+    /// Ends the run and returns its score. `ballHeld` means the horn caught the
+    /// player mid-aim: the ball in their hand is already the first grab of the
+    /// next run, so the fresh clock starts immediately.
+    func endRun(at now: TimeInterval, ballHeld: Bool) -> Int {
+        let finished = runScore
+        runScore = 0
+        isAwaitingBuzzerBeater = false
+        deadline = ballHeld ? now + Self.duration : nil
+        return finished
+    }
+
+    /// Leaving or re-entering the mode wipes the run without recording it.
+    func resetForModeChange() {
+        runScore = 0
+        isAwaitingBuzzerBeater = false
+        deadline = nil
+    }
+}

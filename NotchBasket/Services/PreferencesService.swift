@@ -38,6 +38,8 @@ final class PreferencesService: ObservableObject {
         static let reducedEffects = "reducedEffects"
         static let showDockIcon = "showDockIcon"
         static let bestStreak = "bestStreak"
+        static let playMode = "playMode"
+        static let bestShotClockRun = "bestShotClockRun"
         static let lifetimeBaskets = "lifetimeBaskets"
         static let lifetimeShots = "lifetimeShots"
         static let hasShownOnboarding = "hasShownOnboarding"
@@ -57,6 +59,11 @@ final class PreferencesService: ObservableObject {
     @Published var debugGeometry: Bool { didSet { defaults.set(debugGeometry, forKey: Key.debugGeometry) } }
     @Published var reducedEffects: Bool { didSet { defaults.set(reducedEffects, forKey: Key.reducedEffects) } }
     @Published var showDockIcon: Bool { didSet { defaults.set(showDockIcon, forKey: Key.showDockIcon) } }
+    @Published var playMode: PlayMode { didSet { defaults.set(playMode.rawValue, forKey: Key.playMode) } }
+
+    private(set) var bestShotClockRun: Int {
+        didSet { defaults.set(bestShotClockRun, forKey: Key.bestShotClockRun) }
+    }
 
     private(set) var bestStreak: Int {
         didSet { defaults.set(bestStreak, forKey: Key.bestStreak) }
@@ -89,6 +96,8 @@ final class PreferencesService: ObservableObject {
             Key.reducedEffects: false,
             Key.showDockIcon: false,
             Key.bestStreak: 0,
+            Key.playMode: PlayMode.free.rawValue,
+            Key.bestShotClockRun: 0,
             Key.lifetimeBaskets: 0,
             Key.lifetimeShots: 0,
             Key.hasShownOnboarding: false
@@ -109,6 +118,8 @@ final class PreferencesService: ObservableObject {
         debugGeometry = defaults.bool(forKey: Key.debugGeometry)
         reducedEffects = defaults.bool(forKey: Key.reducedEffects)
         showDockIcon = defaults.bool(forKey: Key.showDockIcon)
+        playMode = PlayMode(rawValue: defaults.string(forKey: Key.playMode) ?? "") ?? .free
+        bestShotClockRun = max(defaults.integer(forKey: Key.bestShotClockRun), 0)
         bestStreak = max(defaults.integer(forKey: Key.bestStreak), 0)
         lifetimeBaskets = max(defaults.integer(forKey: Key.lifetimeBaskets), 0)
         lifetimeShots = max(defaults.integer(forKey: Key.lifetimeShots), 0)
@@ -125,8 +136,15 @@ final class PreferencesService: ObservableObject {
         }
     }
 
+    func registerShotClockRun(_ score: Int) {
+        if score > bestShotClockRun {
+            bestShotClockRun = score
+        }
+    }
+
     func resetHighScores() {
         bestStreak = 0
+        bestShotClockRun = 0
         lifetimeBaskets = 0
         lifetimeShots = 0
     }
