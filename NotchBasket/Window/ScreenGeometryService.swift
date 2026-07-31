@@ -136,6 +136,21 @@ struct ScreenGeometryService: ScreenGeometryProviding {
         )
     }
 
+    /// Where a ball must sit to be fully hidden before its drop: centred on the
+    /// notch, with its bottom edge just above the notch's lower boundary. The
+    /// notch is dead pixels and everything above the screen top is off-panel, so
+    /// a ball parked here is invisible however much taller it is than the notch —
+    /// the hardware does the occlusion.
+    static func notchDropPoint(
+        notchRect: CGRect,
+        ballRadius: CGFloat
+    ) -> CGPoint {
+        CGPoint(
+            x: notchRect.midX,
+            y: notchRect.minY + ballRadius + 2
+        )
+    }
+
     static func ballSpawnPoint(
         screenWidth: CGFloat,
         floorY: CGFloat,

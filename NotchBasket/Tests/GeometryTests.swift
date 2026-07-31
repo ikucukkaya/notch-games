@@ -218,6 +218,43 @@ final class GeometryTests: XCTestCase {
         XCTAssertEqual(body.area, drawnSize.area, accuracy: drawnSize.area * 0.01)
     }
 
+    /// The notch is dead pixels and everything above the screen top is off-panel,
+    /// so a ball whose bottom edge sits above the notch's lower boundary is
+    /// invisible however much taller it is than the notch. The reveal is the
+    /// hardware's job; this pins the geometry that makes it work.
+    func testNotchDropPointHidesTheBallBehindTheNotch() {
+        let notch = CGRect(x: 751, y: 1074, width: 209, height: 38)
+        let ballRadius = GameTuning.ballDiameter / 2
+
+        let drop = ScreenGeometryService.notchDropPoint(
+            notchRect: notch,
+            ballRadius: ballRadius
+        )
+
+        XCTAssertEqual(drop.x, notch.midX)
+        XCTAssertGreaterThan(
+            drop.y - ballRadius,
+            notch.minY,
+            "part of the ball would already be visible below the notch"
+        )
+    }
+
+    func testScoreboardHangsCenteredUnderTheNotch() {
+        let notch = CGRect(x: 751, y: 1074, width: 209, height: 38)
+
+        let panel = ScoreboardLayout.panelFrame(notchRect: notch)
+
+        XCTAssertEqual(panel.midX, notch.midX, accuracy: 0.001)
+        XCTAssertEqual(
+            panel.maxY,
+            notch.minY,
+            accuracy: 0.001,
+            "the panel must hang from the notch's lower edge"
+        )
+        XCTAssertLessThan(panel.width, notch.width)
+        XCTAssertGreaterThanOrEqual(panel.width, 120)
+    }
+
     func testBallSpawnStaysInsideBoundaries() {
         let floorY: CGFloat = 80
         let spawn = ScreenGeometryService.ballSpawnPoint(

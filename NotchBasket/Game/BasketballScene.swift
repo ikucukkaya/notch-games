@@ -2,6 +2,24 @@ import AppKit
 import OSLog
 import SpriteKit
 
+/// Where the arena scoreboard hangs when the screen has a notch: centred under
+/// it, slightly narrower, suspended just below its lower edge — the notch reads
+/// as the jumbotron housing.
+enum ScoreboardLayout {
+    static let height: CGFloat = 40
+    static let inset: CGFloat = 24
+
+    static func panelFrame(notchRect: CGRect) -> CGRect {
+        let width = max(notchRect.width - (inset * 2), 120)
+        return CGRect(
+            x: notchRect.midX - (width / 2),
+            y: notchRect.minY - height,
+            width: width,
+            height: height
+        )
+    }
+}
+
 enum BoundarySoundPolicy {
     static func impactSpeed(boundaryName: String?, velocity: CGVector) -> CGFloat {
         switch boundaryName {
@@ -40,6 +58,13 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
     /// overlay 60 times a second forever, which alone held the idle app near half
     /// a core. Any interaction or state change restores full pace immediately.
     private var quiescentFrames = 0
+
+    /// True while a fresh ball is falling out of the notch. The top boundary
+    /// spans the notch's x-range, so the ball's boundary collision and contact
+    /// masks are stripped for the drop and restored once it is clear below —
+    /// otherwise it would land on the ceiling from outside, or fire a phantom
+    /// boundary thud crossing the line.
+    private var isNotchDropInProgress = false
     private let idleFramesPerSecond = 10
     private let quiescentFramesBeforeIdle = 30
 
@@ -230,6 +255,30 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         view?.showsNodeCount = false
         debugLayer.isHidden = !preferences.debugGeometry
         updateDebugLabel()
+    }
+
+    private func updateNotchDrop() {
+        guard isNotchDropInProgress, ballState == .spawning, let ball else { return }
+
+        // Clear of the ceiling line: give the ball its boundaries back.
+        if let notchRect = geometry.notchRect,
+           ball.position.y < notchRect.minY - ball.radius,
+           let body = ball.physicsBody,
+           body.collisionBitMask & PhysicsCategory.boundary == 0 {
+            body.collisionBitMask |= PhysicsCategory.boundary
+            body.contactTestBitMask |= PhysicsCategory.boundary
+        }
+
+        // Landed and still: the drop is over and the ball is the player's.
+        let speed = (ball.physicsBody?.velocity ?? .zero).length
+        let restored = (ball.physicsBody?.collisionBitMask ?? 0)
+            & PhysicsCategory.boundary != 0
+        if restored,
+           speed < GameTuning.stillSpeedThreshold,
+           ball.position.y < geometry.floorY + ball.radius + 6 {
+            isNotchDropInProgress = false
+            ballState = .ready
+        }
     }
 
     private func updateRenderPace() {
@@ -438,6 +487,7 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
             }
         }
 
+        updateNotchDrop()
         updateRenderPace()
 
         guard isGamePresented, ballState == .flying || ballState == .scored, let ball else {
@@ -573,12 +623,32 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
             GameTuning.maximumBallDiameter
         )
         let ball = BasketballNode(diameter: diameter)
+        self.ball = ball
+        isNotchDropInProgress = false
+
+        if let notchRect = geometry.notchRect {
+            // The ball is born behind the notch — invisible, because the notch is
+            // dead pixels and the rest of it pokes above the panel — and simply
+            // falls into view. The hardware supplies the reveal.
+            ball.position = ScreenGeometryService.notchDropPoint(
+                notchRect: notchRect,
+                ballRadius: ball.radius
+            )
+            ball.physicsBody?.collisionBitMask &= ~PhysicsCategory.boundary
+            ball.physicsBody?.contactTestBitMask &= ~PhysicsCategory.boundary
+            isNotchDropInProgress = true
+            addChild(ball)
+            ballState = .spawning
+            // No spawn jingle: the drop announces itself with its own landing
+            // bounce, and the hoop's deploy whoosh already covers presentation.
+            return
+        }
+
         ball.position = geometry.ballSpawnPoint
         ball.alpha = 0
         ball.setScale(0.72)
         ball.physicsBody?.isDynamic = false
         ball.physicsBody?.affectedByGravity = false
-        self.ball = ball
         addChild(ball)
 
         ballState = .spawning
@@ -716,6 +786,12 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
     private func buildScoreOverlay() {
         scoreOverlay.removeFromParent()
         scoreOverlay.removeAllChildren()
+
+        if let notchRect = geometry.notchRect {
+            buildNotchScoreboard(under: notchRect)
+            return
+        }
+
         scoreOverlay.position = CGPoint(x: min(size.width - 112, geometry.rightBoundaryX - 104), y: size.height - 86)
         scoreOverlay.zPosition = 100
         addChild(scoreOverlay)
@@ -743,6 +819,70 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         bestLabel.fontColor = NSColor.white.withAlphaComponent(0.62)
         bestLabel.horizontalAlignmentMode = .right
         bestLabel.position = CGPoint(x: 78, y: -21)
+        scoreOverlay.addChild(bestLabel)
+    }
+
+    /// The arena scoreboard: a panel hanging beneath the notch on two straps, so
+    /// the notch itself reads as the jumbotron housing. Part of the scenery — it
+    /// sits behind the ball, not on top of everything like the fallback overlay.
+    private func buildNotchScoreboard(under notchRect: CGRect) {
+        let panel = ScoreboardLayout.panelFrame(notchRect: notchRect)
+        scoreOverlay.position = CGPoint(x: panel.midX, y: panel.midY)
+        scoreOverlay.zPosition = 12
+        addChild(scoreOverlay)
+
+        // Dual-tone like the rest of the court furniture: a dark silhouette so it
+        // reads over light desktops, a bright inner edge for dark ones.
+        let contrast = SKShapeNode(
+            rectOf: CGSize(width: panel.width + 6, height: panel.height + 6),
+            cornerRadius: 11
+        )
+        contrast.fillColor = NSColor.black.withAlphaComponent(0.78)
+        contrast.strokeColor = NSColor.black.withAlphaComponent(0.72)
+        contrast.lineWidth = 4
+        contrast.zPosition = -1
+        scoreOverlay.addChild(contrast)
+
+        let background = SKShapeNode(
+            rectOf: CGSize(width: panel.width, height: panel.height),
+            cornerRadius: 9
+        )
+        background.name = "notchScoreboardVisual"
+        background.fillColor = NSColor(calibratedWhite: 0.10, alpha: 0.94)
+        background.strokeColor = NSColor.white.withAlphaComponent(0.60)
+        background.lineWidth = 1.6
+        scoreOverlay.addChild(background)
+
+        // Two straps up to the notch's lower edge.
+        for direction in [-1.0, 1.0] {
+            let strapX = direction * (panel.width / 2 - 14)
+            let strap = SKShapeNode(rectOf: CGSize(width: 3, height: 8))
+            strap.position = CGPoint(x: strapX, y: (panel.height / 2) + 4)
+            strap.fillColor = NSColor(calibratedWhite: 0.22, alpha: 0.95)
+            strap.strokeColor = NSColor.white.withAlphaComponent(0.35)
+            strap.lineWidth = 1
+            scoreOverlay.addChild(strap)
+        }
+
+        scoreLabel.fontSize = 19
+        scoreLabel.fontColor = .white
+        scoreLabel.horizontalAlignmentMode = .left
+        scoreLabel.verticalAlignmentMode = .center
+        scoreLabel.position = CGPoint(x: -(panel.width / 2) + 12, y: 1)
+        scoreOverlay.addChild(scoreLabel)
+
+        streakLabel.fontSize = 11
+        streakLabel.fontColor = NSColor.white.withAlphaComponent(0.82)
+        streakLabel.horizontalAlignmentMode = .right
+        streakLabel.verticalAlignmentMode = .center
+        streakLabel.position = CGPoint(x: (panel.width / 2) - 12, y: 8)
+        scoreOverlay.addChild(streakLabel)
+
+        bestLabel.fontSize = 11
+        bestLabel.fontColor = NSColor.white.withAlphaComponent(0.62)
+        bestLabel.horizontalAlignmentMode = .right
+        bestLabel.verticalAlignmentMode = .center
+        bestLabel.position = CGPoint(x: (panel.width / 2) - 12, y: -8)
         scoreOverlay.addChild(bestLabel)
     }
 
