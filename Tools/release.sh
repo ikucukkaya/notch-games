@@ -65,6 +65,11 @@ ln -s /Applications "$STAGE/Applications"
 hdiutil create -volname "NotchBasket" -srcfolder "$STAGE" \
   -ov -format UDZO "$DMG" -quiet
 
+# Sign the DMG itself, not just the app inside: notarization accepts an
+# unsigned disk image, but Gatekeeper's assessment of the download wants a
+# primary signature on the container too.
+codesign --force --timestamp --sign "Developer ID Application" "$DMG"
+
 echo "==> Notarizing (waits for Apple)"
 xcrun notarytool submit "$DMG" --keychain-profile "$PROFILE" --wait
 
