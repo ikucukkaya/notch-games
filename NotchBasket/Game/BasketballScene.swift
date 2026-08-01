@@ -72,7 +72,12 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
     private var lastThreePointLineX: CGFloat = .nan
     private var activePlayMode: PlayMode = .free
     private var lastClockText = ""
-    private let idleFramesPerSecond = 10
+    // 2, not 10: while quiescent the frame never changes, and grab response is
+    // unaffected — mouseDown restores 60 before the event is handled. The only
+    // thing this slows is a Settings change reaching the screen, by up to half a
+    // second, which is invisible next to the battery cost of redrawing a static
+    // full-screen layer ten times a second.
+    private let idleFramesPerSecond = 2
     private let quiescentFramesBeforeIdle = 30
 
     private var ballState: BallState = .spawning {
