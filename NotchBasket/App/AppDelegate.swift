@@ -90,6 +90,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settings.target = self
         menu.addItem(settings)
 
+        // The app itself never touches the network — a point the README makes
+        // loudly — so updates are the browser's job, and only when asked.
+        let updates = NSMenuItem(
+            title: "Check for Updates…",
+            action: #selector(checkForUpdates),
+            keyEquivalent: ""
+        )
+        updates.target = self
+        menu.addItem(updates)
+
         let shortcut = NSMenuItem(title: "Toggle Shortcut: ⌃⌥B", action: nil, keyEquivalent: "")
         shortcut.isEnabled = false
         menu.addItem(shortcut)
@@ -198,6 +208,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.activate(ignoringOtherApps: true)
         onboardingController?.showWindow(nil)
         onboardingController?.window?.makeKeyAndOrderFront(nil)
+    }
+
+    @objc private func checkForUpdates() {
+        guard let url = URL(
+            string: "https://github.com/ikucukkaya/notch-games/releases"
+        ) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     @objc private func quit() {
