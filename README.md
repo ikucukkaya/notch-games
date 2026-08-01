@@ -12,6 +12,17 @@ The MVP is built entirely with public Apple frameworks:
 - `UserDefaults` for preferences and lifetime statistics
 - `OSLog.Logger` for useful runtime diagnostics
 
+## Install
+
+Download the latest `NotchBasket-x.y.dmg` from
+[Releases](https://github.com/ikucukkaya/notch-games/releases), open it, and
+drag NotchBasket to Applications. That's it — the app is notarized, ~2 MB,
+asks for **no permissions**, and needs no Xcode or command line.
+
+Requirements: macOS 14 or newer. Best on a notched MacBook — the notch is part
+of the court — but non-notched Macs and external displays get a graceful
+fallback.
+
 ## Screenshots
 
 Screenshots are intentionally left as placeholders until the app is captured on representative notched and non-notched hardware.
@@ -22,49 +33,16 @@ Screenshots are intentionally left as placeholders until the app is captured on 
 
 ## Requirements
 
-- macOS 14 Sonoma or newer
-- Xcode 26.6 or another Xcode version with a current macOS SDK
-- Apple Silicon is the primary target
+- macOS 14 Sonoma or newer; Apple Silicon is the primary target
 - A notched MacBook display is preferred, but non-notched Macs and external displays use a centered fallback
 
 No third-party packages, private APIs, screen-recording permission, input-monitoring permission, network access, or analytics SDK are used.
 
-## Build and run
+## Getting started
 
-1. Open `NotchBasket.xcodeproj` in Xcode.
-2. Select the **NotchBasket** scheme and the **My Mac** run destination.
-3. Open the NotchBasket target’s **Signing & Capabilities** pane.
-4. Select your development team if Xcode asks for signing. A local command-line build can also use ad-hoc/no signing.
-5. Press Command–R to build and run.
-6. On first launch, read the compact onboarding panel.
-7. Click the basketball icon in the menu bar and select **Play**.
-8. Pull the ball backward and release it to shoot. Press Escape to hide the game.
-
-Command-line build:
-
-```sh
-xcodebuild \
-  -project NotchBasket.xcodeproj \
-  -scheme NotchBasket \
-  -configuration Debug \
-  -destination 'platform=macOS,arch=arm64' \
-  -derivedDataPath .build/DerivedData \
-  CODE_SIGNING_ALLOWED=NO \
-  build
-```
-
-Command-line tests:
-
-```sh
-xcodebuild \
-  -project NotchBasket.xcodeproj \
-  -scheme NotchBasket \
-  -configuration Debug \
-  -destination 'platform=macOS,arch=arm64' \
-  -derivedDataPath .build/DerivedData \
-  CODE_SIGNING_ALLOWED=NO \
-  test
-```
+1. Launch NotchBasket and read the compact onboarding panel.
+2. Click the basketball icon in the menu bar and select **Play**.
+3. Pull the ball backward and release it to shoot. Press Escape to hide the game, or toggle it anywhere with ⌃⌥B.
 
 ## How to play
 
@@ -238,6 +216,42 @@ The overlay is transparent because its own background has no pixels; it does not
 - Mission Control and protected system surfaces intentionally remain outside the app’s control.
 - Because click-through switches at the window level, a very fast move-and-click over the ball can occasionally require a second click on heavily loaded systems.
 - Launch at login and shortcut customization are not included in this MVP.
+
+## Building from source
+
+Only needed for contributors — users should [install the DMG](#install).
+
+1. Open `NotchBasket.xcodeproj` in Xcode (any version with a current macOS SDK).
+2. Select the **NotchBasket** scheme and the **My Mac** destination, then Command–R.
+   A local build runs fine with ad-hoc/no signing.
+
+Command-line build:
+
+```sh
+xcodebuild \
+  -project NotchBasket.xcodeproj \
+  -scheme NotchBasket \
+  -configuration Debug \
+  -destination 'platform=macOS,arch=arm64' \
+  -derivedDataPath .build/DerivedData \
+  CODE_SIGNING_ALLOWED=NO \
+  build
+```
+
+Command-line tests:
+
+```sh
+xcodebuild \
+  -project NotchBasket.xcodeproj \
+  -scheme NotchBasket \
+  -configuration Debug \
+  -destination 'platform=macOS,arch=arm64' \
+  -derivedDataPath .build/DerivedData \
+  CODE_SIGNING_ALLOWED=NO \
+  test
+```
+
+Releases are cut with `Tools/release.sh`; see `RELEASE.md`.
 
 ## Manual testing
 
