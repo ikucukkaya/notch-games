@@ -39,6 +39,7 @@ final class PreferencesService: ObservableObject {
         static let showDockIcon = "showDockIcon"
         static let bestStreak = "bestStreak"
         static let playMode = "playMode"
+        static let hideFromScreenCapture = "hideFromScreenCapture"
         static let bestShotClockRun = "bestShotClockRun"
         static let lifetimeBaskets = "lifetimeBaskets"
         static let lifetimeShots = "lifetimeShots"
@@ -60,6 +61,7 @@ final class PreferencesService: ObservableObject {
     @Published var reducedEffects: Bool { didSet { defaults.set(reducedEffects, forKey: Key.reducedEffects) } }
     @Published var showDockIcon: Bool { didSet { defaults.set(showDockIcon, forKey: Key.showDockIcon) } }
     @Published var playMode: PlayMode { didSet { defaults.set(playMode.rawValue, forKey: Key.playMode) } }
+    @Published var hideFromScreenCapture: Bool { didSet { defaults.set(hideFromScreenCapture, forKey: Key.hideFromScreenCapture) } }
 
     private(set) var bestShotClockRun: Int {
         didSet { defaults.set(bestShotClockRun, forKey: Key.bestShotClockRun) }
@@ -97,6 +99,7 @@ final class PreferencesService: ObservableObject {
             Key.showDockIcon: false,
             Key.bestStreak: 0,
             Key.playMode: PlayMode.shotClock24.rawValue,
+            Key.hideFromScreenCapture: false,
             Key.bestShotClockRun: 0,
             Key.lifetimeBaskets: 0,
             Key.lifetimeShots: 0,
@@ -119,6 +122,7 @@ final class PreferencesService: ObservableObject {
         reducedEffects = defaults.bool(forKey: Key.reducedEffects)
         showDockIcon = defaults.bool(forKey: Key.showDockIcon)
         playMode = PlayMode(rawValue: defaults.string(forKey: Key.playMode) ?? "") ?? .free
+        hideFromScreenCapture = defaults.bool(forKey: Key.hideFromScreenCapture)
         bestShotClockRun = max(defaults.integer(forKey: Key.bestShotClockRun), 0)
         bestStreak = max(defaults.integer(forKey: Key.bestStreak), 0)
         lifetimeBaskets = max(defaults.integer(forKey: Key.lifetimeBaskets), 0)

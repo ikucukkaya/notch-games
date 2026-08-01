@@ -99,6 +99,8 @@ struct SettingsView: View {
     private var generalSection: some View {
         settingsGroup("General") {
             Toggle("Show Dock icon", isOn: $preferences.showDockIcon)
+            Toggle("Hide from screen recordings", isOn: $preferences.hideFromScreenCapture)
+                .onChange(of: preferences.hideFromScreenCapture) { _, _ in onGameplayPreferenceChanged() }
             HStack {
                 Text("Global shortcut")
                 Spacer()

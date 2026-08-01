@@ -22,6 +22,7 @@ enum OverlayInteractionPolicy {
 final class OverlayWindowController {
     private(set) var screen: NSScreen
     private let panel: OverlayPanel
+    private let preferences: PreferencesService
     private let skView: SKView
     private let scene: BasketballScene
     private let audioService: AudioService
@@ -49,6 +50,7 @@ final class OverlayWindowController {
     ) {
         self.screen = screen
         self.audioService = audioService
+        self.preferences = preferences
         panel = OverlayPanel(screen: screen)
         skView = SKView(frame: CGRect(origin: .zero, size: screen.frame.size))
         scene = BasketballScene(
@@ -65,6 +67,7 @@ final class OverlayWindowController {
         skView.ignoresSiblingOrder = true
         skView.preferredFramesPerSecond = 60
         skView.presentScene(scene)
+        applyScreenCaptureVisibility(hidden: preferences.hideFromScreenCapture)
         panel.contentView = skView
         panel.onEscape = { [weak self] in
             self?.onHideRequested?()
@@ -72,6 +75,10 @@ final class OverlayWindowController {
         scene.onInteractionStateChanged = { [weak self] in
             self?.updateMouseCapture()
         }
+    }
+
+    func applyScreenCaptureVisibility(hidden: Bool) {
+        panel.sharingType = hidden ? .none : .readOnly
     }
 
     func show() {
@@ -125,6 +132,7 @@ final class OverlayWindowController {
 
     func applyPreferences() {
         scene.applyPreferences()
+        applyScreenCaptureVisibility(hidden: preferences.hideFromScreenCapture)
     }
 
     private func installKeyMonitor() {

@@ -31,7 +31,11 @@ final class OverlayPanel: NSPanel {
             .stationary,
             .ignoresCycle
         ]
-        sharingType = .none
+        // Visible to screen recordings by default: the owner could not record
+        // a promo and users could not share clips while this was .none. The
+        // stealth behaviour survives as a Settings toggle for people who play
+        // during screen shares.
+        sharingType = .readOnly
         title = "NotchBasket Gameplay"
         setAccessibilityLabel("NotchBasket gameplay overlay")
     }
