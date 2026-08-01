@@ -149,3 +149,39 @@ final class ShotCalculationTests: XCTestCase {
         XCTAssertEqual(compensated, pointer)
     }
 }
+
+
+extension ShotCalculationTests {
+    /// A corner pull used to drag the visual ball off the left edge of the
+    /// screen; releasing then stranded it outside the boundary line, where its
+    /// only way home was a respawn from the notch.
+    func testCornerPullKeepsTheBallOnTheCourt() {
+        let controller = ShotController()
+
+        let clamped = controller.courtClampedBallPosition(
+            dragPoint: CGPoint(x: -90, y: 12),
+            floorY: 80,
+            leftBoundaryX: 0,
+            rightBoundaryX: 1_710,
+            ballRadius: 25.3
+        )
+
+        XCTAssertEqual(clamped.x, 27.3, accuracy: 0.001)
+        XCTAssertEqual(clamped.y, 110.3, accuracy: 0.001)
+    }
+
+    func testInteriorDragPointIsUntouched() {
+        let controller = ShotController()
+
+        let clamped = controller.courtClampedBallPosition(
+            dragPoint: CGPoint(x: 600, y: 400),
+            floorY: 80,
+            leftBoundaryX: 0,
+            rightBoundaryX: 1_710,
+            ballRadius: 25.3
+        )
+
+        XCTAssertEqual(clamped.x, 600, accuracy: 0.001)
+        XCTAssertEqual(clamped.y, 400, accuracy: 0.001)
+    }
+}

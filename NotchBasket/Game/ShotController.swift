@@ -58,6 +58,27 @@ struct ShotController: ShotCalculating {
         )
     }
 
+    /// Where the ball may actually be shown and launched from: on the court.
+    /// The pull vector itself is deliberately unclamped — dragging past an edge
+    /// still charges the shot — but the ball must never leave the playable area,
+    /// or a corner pull drags it off screen and the release strands it outside
+    /// the boundary lines, where the only exit is a respawn.
+    func courtClampedBallPosition(
+        dragPoint: CGPoint,
+        floorY: CGFloat,
+        leftBoundaryX: CGFloat,
+        rightBoundaryX: CGFloat,
+        ballRadius: CGFloat
+    ) -> CGPoint {
+        CGPoint(
+            x: min(
+                max(dragPoint.x, leftBoundaryX + ballRadius + 2),
+                rightBoundaryX - ballRadius - 2
+            ),
+            y: max(dragPoint.y, floorY + ballRadius + 5)
+        )
+    }
+
     func launchVelocity(
         ballOrigin: CGPoint,
         dragPoint: CGPoint,

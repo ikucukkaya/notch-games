@@ -498,10 +498,15 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
             dragPoint: effectivePoint
         )
         currentDragPoint = clampedPoint
-        // Preserve the full pull vector while keeping the visual ball above the floor.
-        ball.position = CGPoint(
-            x: clampedPoint.x,
-            y: max(clampedPoint.y, geometry.floorY + ball.radius + 5)
+        // Preserve the full pull vector while keeping the visual ball on the
+        // court — a corner pull used to drag it off the left edge, and the
+        // release then stranded it outside the boundary line.
+        ball.position = shotController.courtClampedBallPosition(
+            dragPoint: clampedPoint,
+            floorY: geometry.floorY,
+            leftBoundaryX: geometry.leftBoundaryX,
+            rightBoundaryX: geometry.rightBoundaryX,
+            ballRadius: ball.radius
         )
 
         let dragDistance = hypot(clampedPoint.x - ballOrigin.x, clampedPoint.y - ballOrigin.y)
@@ -553,7 +558,13 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
 
         didScoreCurrentShot = false
         scoreController.resetForNewShot()
-        ball.position.y = max(ball.position.y, geometry.floorY + ball.radius + 5)
+        ball.position = shotController.courtClampedBallPosition(
+            dragPoint: ball.position,
+            floorY: geometry.floorY,
+            leftBoundaryX: geometry.leftBoundaryX,
+            rightBoundaryX: geometry.rightBoundaryX,
+            ballRadius: ball.radius
+        )
         ball.physicsBody?.isDynamic = true
         ball.physicsBody?.affectedByGravity = true
         ball.physicsBody?.velocity = velocity
