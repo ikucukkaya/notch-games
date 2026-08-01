@@ -55,14 +55,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func configureMenuBar() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = item.button {
-            // The app icon itself, not a template symbol: one identity from the
-            // Dock to the menu bar. Full colour is deliberate — the toy's face
-            // is the notch-and-ball mark, and 18 pt picks up the hand-tuned
-            // 16/32 px renders from the asset catalog.
-            let icon = NSImage(named: "AppIcon")
-            icon?.size = NSSize(width: 18, height: 18)
-            button.image = icon
-            button.image?.accessibilityDescription = "NotchBasket"
+            button.image = NSImage(
+                systemSymbolName: "basketball.fill",
+                accessibilityDescription: "NotchBasket"
+            )
             button.toolTip = "NotchBasket"
         }
 
