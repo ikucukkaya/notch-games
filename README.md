@@ -21,14 +21,6 @@ asks for **no permissions**, and needs no Xcode or command line.
 
 Requirements: macOS 14 or newer.
 
-## Screenshots
-
-Screenshots are intentionally left as placeholders until the app is captured on representative notched and non-notched hardware.
-
-- Gameplay overlay on a notched MacBook: _coming soon_
-- Right-side mounted layout: _coming soon_
-- Settings: _coming soon_
-
 ## Requirements
 
 - macOS 14 Sonoma or newer; Apple Silicon is the primary target
