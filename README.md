@@ -32,7 +32,6 @@ Screenshots are intentionally left as placeholders until the app is captured on 
 ## Requirements
 
 - macOS 14 Sonoma or newer; Apple Silicon is the primary target
-- A notched MacBook display is preferred, but non-notched Macs and external displays use a centered fallback
 
 No third-party packages, private APIs, screen-recording permission, input-monitoring permission, network access, or analytics SDK are used.
 
