@@ -128,6 +128,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func applyActivationPolicy(showDockIcon: Bool) {
+        // An agent app promoted to .regular at runtime gets its Dock tile
+        // without the bundle icon — the tile comes up generic even though
+        // Finder shows the icon perfectly. Setting the runtime icon explicitly
+        // is the documented cure, and it is harmless while in accessory mode.
+        NSApp.applicationIconImage = NSImage(named: "AppIcon")
         NSApp.setActivationPolicy(showDockIcon ? .regular : .accessory)
     }
 
