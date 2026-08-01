@@ -19,9 +19,7 @@ Download the latest `NotchBasket-x.y.dmg` from
 drag NotchBasket to Applications. That's it — the app is notarized, ~2 MB,
 asks for **no permissions**, and needs no Xcode or command line.
 
-Requirements: macOS 14 or newer. Best on a notched MacBook — the notch is part
-of the court — but non-notched Macs and external displays get a graceful
-fallback.
+Requirements: macOS 14 or newer.
 
 ## Screenshots
 
