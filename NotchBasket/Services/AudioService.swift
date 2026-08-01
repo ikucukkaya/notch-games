@@ -240,7 +240,6 @@ final class AudioService {
         for index in 0..<Int(frameCount) {
             let time = Double(index) / format.sampleRate
             let normalizedTime = time / duration
-            let noise = pseudoNoise(at: index)
             let value: Double
 
             switch effect {

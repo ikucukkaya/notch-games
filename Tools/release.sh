@@ -12,6 +12,19 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 PROFILE="${1:-notchbasket}"
+
+# The project deliberately carries no team ID; derive it from the Developer ID
+# certificate in the keychain so the archive and export agree on a team.
+TEAM=$(security find-identity -v -p codesigning \
+  | grep -m1 "Developer ID Application" \
+  | sed 's/.*(\(.*\))".*/\1/')
+if [ -z "$TEAM" ]; then
+  echo "No Developer ID Application certificate in the keychain." >&2
+  echo "Xcode -> Settings -> Accounts -> Manage Certificates -> + -> Developer ID Application" >&2
+  exit 1
+fi
+echo "==> Signing team: $TEAM"
+
 VERSION=$(grep -m1 "MARKETING_VERSION" NotchBasket.xcodeproj/project.pbxproj | sed 's/[^0-9.]//g')
 DIST="dist"
 ARCHIVE="$DIST/NotchBasket.xcarchive"
@@ -23,8 +36,8 @@ rm -rf "$DIST" && mkdir -p "$DIST"
 echo "==> Archiving $VERSION"
 xcodebuild archive \
   -project NotchBasket.xcodeproj -scheme NotchBasket \
-  -destination 'platform=macOS' -archivePath "$ARCHIVE" \
-  CODE_SIGN_STYLE=Automatic -quiet
+  -destination 'platform=macOS,arch=arm64' -archivePath "$ARCHIVE" \
+  CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM="$TEAM" -quiet
 
 echo "==> Exporting with Developer ID"
 cat > "$DIST/export-options.plist" <<PLIST
@@ -33,6 +46,7 @@ cat > "$DIST/export-options.plist" <<PLIST
 <plist version="1.0"><dict>
   <key>method</key><string>developer-id</string>
   <key>destination</key><string>export</string>
+  <key>teamID</key><string>$TEAM</string>
 </dict></plist>
 PLIST
 xcodebuild -exportArchive -archivePath "$ARCHIVE" \
