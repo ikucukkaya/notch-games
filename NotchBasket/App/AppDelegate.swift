@@ -19,6 +19,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var scoreItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if DemoRecorder.recordIfRequested() {
+            // Recording drives the run loop and exits the process itself.
+            return
+        }
+
         NSApp.applicationIconImage = makeApplicationIcon()
         applyActivationPolicy(showDockIcon: preferences.showDockIcon)
         configureMenuBar()

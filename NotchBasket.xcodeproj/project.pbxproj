@@ -31,6 +31,7 @@
 		B00000000000000000000016 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000016 /* SettingsView.swift */; };
 		B00000000000000000000017 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000017 /* OnboardingView.swift */; };
 		B00000000000000000000018 /* AuxiliaryWindowControllers.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000018 /* AuxiliaryWindowControllers.swift */; };
+		B00000000000000000000032 /* DemoRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000032 /* DemoRecorder.swift */; };
 		B00000000000000000000031 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000031 /* Assets.xcassets */; };
 		B00000000000000000000019 /* NetClothSimulation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000019 /* NetClothSimulation.swift */; };
 		B00000000000000000000101 /* GeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000101 /* GeometryTests.swift */; };
@@ -80,6 +81,7 @@
 		F00000000000000000000016 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		F00000000000000000000017 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		F00000000000000000000018 /* AuxiliaryWindowControllers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuxiliaryWindowControllers.swift; sourceTree = "<group>"; };
+		F00000000000000000000032 /* DemoRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoRecorder.swift; sourceTree = "<group>"; };
 		F00000000000000000000031 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources/Assets.xcassets; sourceTree = "<group>"; };
 		F00000000000000000000019 /* NetClothSimulation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetClothSimulation.swift; sourceTree = "<group>"; };
 		F00000000000000000000030 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -172,6 +174,7 @@
 				F00000000000000000000001 /* NotchBasketApp.swift */,
 				F00000000000000000000002 /* AppDelegate.swift */,
 				F00000000000000000000003 /* AppState.swift */,
+				F00000000000000000000032 /* DemoRecorder.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -356,6 +359,7 @@
 				B00000000000000000000001 /* NotchBasketApp.swift in Sources */,
 				B00000000000000000000002 /* AppDelegate.swift in Sources */,
 				B00000000000000000000003 /* AppState.swift in Sources */,
+				B00000000000000000000032 /* DemoRecorder.swift in Sources */,
 				B00000000000000000000004 /* OverlayWindowController.swift in Sources */,
 				B00000000000000000000005 /* OverlayPanel.swift in Sources */,
 				B00000000000000000000006 /* ScreenGeometryService.swift in Sources */,

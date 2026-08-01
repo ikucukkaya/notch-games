@@ -380,6 +380,10 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func updateRenderPace() {
+        guard !isRenderPacingDisabled else {
+            setPreferredFramesPerSecond(60)
+            return
+        }
         // Quiescent means the shot cycle is at rest AND the net has fallen
         // asleep AND the ball itself is still. The last condition is not implied
         // by .ready any more: a ball dropping out of the notch becomes the
@@ -530,6 +534,44 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
             maximumPowerHapticPlayed = true
             hapticService.perform(.maximumPower, preferences: preferences)
         }
+    }
+
+    // MARK: - Scripting seams
+
+    /// Read-only state for the demo recorder and future scene-level tests.
+    var scriptedBallState: BallState { ballState }
+
+    /// The demo recorder samples the view on its own clock, so the idle
+    /// render-pace drop must never fire: there is no mouseDown to restore 60,
+    /// and at 2 fps the clamped delta runs the whole simulation at ~1/15th
+    /// speed — which is exactly what the first three takes recorded.
+    var isRenderPacingDisabled = false
+    var scriptedBallPosition: CGPoint? { ball?.position }
+
+    /// Launches the ball exactly as a player's release does — including starting
+    /// the shot clock, since a scripted shot implies the grab that precedes it.
+    func scriptedShot(velocity: CGVector) {
+        guard ballState == .ready, let ball else { return }
+        if preferences.playMode == .shotClock24 {
+            shotClock.ballGrabbed(at: currentTime)
+        }
+        didScoreCurrentShot = false
+        scoreController.resetForNewShot()
+        hoop?.resetNetForNewShot()
+        ball.physicsBody?.isDynamic = true
+        ball.physicsBody?.affectedByGravity = true
+        ball.physicsBody?.velocity = velocity
+        ball.physicsBody?.angularVelocity = -velocity.dx / max(ball.radius, 1) * 0.035
+        pendingShotPoints = ScoringPolicy.points(
+            releaseX: ball.position.x,
+            threePointLineX: ScoringPolicy.threePointLineX(
+                leftBoundaryX: geometry.leftBoundaryX,
+                rimCenterX: currentHoopAnchor.x
+            )
+        )
+        ballState = .flying
+        resetController.beginShot(at: currentTime)
+        statistics.shotsAttempted += 1
     }
 
     override func mouseUp(with event: NSEvent) {
