@@ -21,6 +21,10 @@ asks for **no permissions**, and needs no Xcode or command line.
 
 Requirements: macOS 14 or newer.
 
+**On Windows?** There is a community-built native Windows port by
+[ANDRETRIPOL](https://github.com/ANDRETRIPOL/notch-games) — a 473 KiB
+dependency-free C++ build of the same game.
+
 ## Requirements
 
 - macOS 14 Sonoma or newer; Apple Silicon is the primary target
