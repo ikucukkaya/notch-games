@@ -2,6 +2,10 @@
 
 NotchBasket is a lightweight native macOS desktop toy with a basketball hoop mounted to the right edge of the display. It lives in the menu bar, presents a transparent SpriteKit overlay for a quick shot or two, and gets out of the way immediately when hidden.
 
+
+https://github.com/user-attachments/assets/7fd7c5a1-cd17-4a00-899b-e7f1522adc8d
+
+
 The MVP is built entirely with public Apple frameworks:
 
 - Swift and AppKit for the application and transparent overlay
