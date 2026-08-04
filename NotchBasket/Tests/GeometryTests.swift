@@ -562,6 +562,55 @@ final class AudioSynthesisTests: XCTestCase {
         XCTAssertGreaterThan(samples.map { abs($0) }.max() ?? 0, 0.65)
     }
 
+    func testScoreChimeHasFullBodyAndSilentEndpoints() throws {
+        for threePointer in [false, true] {
+            let samples = ScoreChimeSynthesizer.samples(
+                sampleRate: 44_100,
+                threePointer: threePointer
+            )
+
+            XCTAssertEqual(
+                samples.count,
+                Int(ScoreChimeSynthesizer.duration(threePointer: threePointer) * 44_100)
+            )
+            XCTAssertEqual(try XCTUnwrap(samples.first), 0, accuracy: 0.001)
+            XCTAssertEqual(try XCTUnwrap(samples.last), 0, accuracy: 0.001)
+            // The audition candidates were normalized to 0.8; the approved
+            // waveform is the spec, loudness included.
+            XCTAssertEqual(samples.map { abs($0) }.max() ?? 0, 0.8, accuracy: 0.02)
+        }
+    }
+
+    /// The three-point chime is the same arpeggio escalated: a fourth note at
+    /// C6. Measure C6 energy where that note rings — it must dwarf whatever
+    /// leakage the two-point variant has there.
+    func testThreePointChimeIsLongerAndAddsC6() {
+        let two = ScoreChimeSynthesizer.samples(sampleRate: 44_100, threePointer: false)
+        let three = ScoreChimeSynthesizer.samples(sampleRate: 44_100, threePointer: true)
+
+        XCTAssertGreaterThan(three.count, two.count)
+
+        func energyAtC6(_ samples: [Float]) -> Double {
+            let start = Int(0.26 * 44_100)
+            let end = min(Int(0.45 * 44_100), samples.count)
+            var sine = 0.0
+            var cosine = 0.0
+            for index in start..<end {
+                let phase = 2 * Double.pi * 1046.5 * Double(index - start) / 44_100
+                sine += Double(samples[index]) * sin(phase)
+                cosine += Double(samples[index]) * cos(phase)
+            }
+            return sine * sine + cosine * cosine
+        }
+
+        XCTAssertGreaterThan(energyAtC6(three), energyAtC6(two) * 3)
+    }
+
+    func testScoreSoundMatchesPointsScored() {
+        XCTAssertEqual(ScoringPolicy.scoreSound(forPoints: 2), .scoreTwo)
+        XCTAssertEqual(ScoringPolicy.scoreSound(forPoints: 3), .scoreThree)
+    }
+
     /// The old rim voice was three bright sines under one shared envelope — a
     /// gated chord, not metal, and the complaint that prompted the redo. The
     /// chosen impact is a low padded thud: measured 89 zero crossings and a

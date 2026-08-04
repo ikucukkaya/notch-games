@@ -913,6 +913,10 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         onStatisticsChanged?(statistics)
 
         hoop?.playScoreAnimation(reducedEffects: preferences.reducedEffects)
+        audioService.play(
+            ScoringPolicy.scoreSound(forPoints: pendingShotPoints),
+            preferences: preferences
+        )
         showScorePop()
         emitScoreParticles()
         hapticService.perform(.basket, preferences: preferences)

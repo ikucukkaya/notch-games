@@ -154,4 +154,8 @@ enum ScoringPolicy {
     static func points(releaseX: CGFloat, threePointLineX: CGFloat) -> Int {
         releaseX < threePointLineX ? 3 : 2
     }
+
+    static func scoreSound(forPoints points: Int) -> SoundEffect {
+        points >= 3 ? .scoreThree : .scoreTwo
+    }
 }

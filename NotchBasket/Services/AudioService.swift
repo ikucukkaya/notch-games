@@ -5,6 +5,8 @@ enum SoundEffect: CaseIterable, Hashable {
     case bounce
     case rim
     case backboard
+    case scoreTwo
+    case scoreThree
     case buzzer
     case deploy
     case retract
@@ -121,6 +123,68 @@ enum HoopImpactSynthesizer {
     }
 }
 
+/// The score reward: a rising pluck arpeggio, chosen by ear from auditioned
+/// WAV candidates ("2-arpej") — C5 E5 G5 for two points, escalated to
+/// C5 E5 G5 C6 with a faster gait and a shimmer tail for three. Ported
+/// sample-for-sample from the approved waveform — resist "fixing" the math
+/// here, because what was approved is the sound.
+enum ScoreChimeSynthesizer {
+    static func duration(threePointer: Bool) -> Double {
+        threePointer ? 0.60 : 0.52
+    }
+
+    static func samples(sampleRate: Double, threePointer: Bool) -> [Float] {
+        let duration = duration(threePointer: threePointer)
+        let frameCount = Int(duration * sampleRate)
+        var canvas = [Double](repeating: 0, count: frameCount)
+
+        let notes: [Double] = threePointer
+            ? [523.25, 659.25, 783.99, 1046.5]
+            : [523.25, 659.25, 783.99]
+        let noteSpacing = threePointer ? 0.062 : 0.072
+
+        for (noteIndex, frequency) in notes.enumerated() {
+            let start = Int(Double(noteIndex) * noteSpacing * sampleRate)
+            let gain = 1.0 + (0.12 * Double(noteIndex))
+            for index in start..<frameCount {
+                let time = Double(index - start) / sampleRate
+                canvas[index] += gain * pluck(time: time, frequency: frequency)
+            }
+        }
+
+        if threePointer {
+            // A quiet sparkling tail after the last note: a detuned high pair.
+            let start = Int(Double(notes.count) * noteSpacing * sampleRate)
+            let end = min(start + Int(0.3 * sampleRate), frameCount)
+            for index in start..<end {
+                let time = Double(index - start) / sampleRate
+                canvas[index] += 0.12 *
+                    (sin(2 * .pi * 3_100 * time) + sin(2 * .pi * 3_100 * 1.007 * time)) *
+                    exp(-10 * time)
+            }
+        }
+
+        var peak = 0.0
+        for index in 0..<frameCount {
+            let time = Double(index) / sampleRate
+            let attack = min(time / 0.004, 1)
+            let release = min(max((duration - time) / 0.05, 0), 1)
+            canvas[index] *= attack * release
+            peak = max(peak, abs(canvas[index]))
+        }
+
+        // Match the loudness the candidates were auditioned at.
+        let scale = peak > 0 ? 0.8 / peak : 1
+        return canvas.map { Float($0 * scale) }
+    }
+
+    /// Marimba-ish pluck: fundamental plus a soft 4th harmonic dying quickly.
+    private static func pluck(time: Double, frequency: Double) -> Double {
+        sin(2 * .pi * frequency * time) * exp(-14 * time)
+            + 0.22 * sin(2 * .pi * 4 * frequency * time) * exp(-14 * 3.2 * time)
+    }
+}
+
 /// A tiny procedural sound bank. Generating buffers locally keeps the toy self-contained
 /// and avoids borrowing macOS alert sounds that feel unrelated to basketball.
 final class AudioService {
@@ -200,6 +264,8 @@ final class AudioService {
         switch effect {
         case .bounce: duration = BasketballCourtBounceSynthesizer.duration
         case .rim, .backboard: duration = HoopImpactSynthesizer.duration
+        case .scoreTwo: duration = ScoreChimeSynthesizer.duration(threePointer: false)
+        case .scoreThree: duration = ScoreChimeSynthesizer.duration(threePointer: true)
         case .buzzer: duration = 0.72
         case .deploy: duration = 0.30
         case .retract: duration = 0.24
@@ -237,6 +303,17 @@ final class AudioService {
             return buffer
         }
 
+        if effect == .scoreTwo || effect == .scoreThree {
+            let chimeSamples = ScoreChimeSynthesizer.samples(
+                sampleRate: format.sampleRate,
+                threePointer: effect == .scoreThree
+            )
+            for index in 0..<min(Int(frameCount), chimeSamples.count) {
+                samples[index] = chimeSamples[index]
+            }
+            return buffer
+        }
+
         for index in 0..<Int(frameCount) {
             let time = Double(index) / format.sampleRate
             let normalizedTime = time / duration
@@ -249,6 +326,10 @@ final class AudioService {
 
             case .rim, .backboard:
                 // Generated above by HoopImpactSynthesizer.
+                value = 0
+
+            case .scoreTwo, .scoreThree:
+                // Generated above by ScoreChimeSynthesizer.
                 value = 0
 
             case .buzzer:
