@@ -255,6 +255,136 @@ final class GeometryTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(panel.width, 120)
     }
 
+    // Minimizing an unrelated window changes the Dock's contents, and macOS
+    // answers with the same didChangeScreenParameters notification a real
+    // display change produces — measured on this machine, the Dock's icons
+    // also shrink to make room, moving the visible frame by ~6 pt. The overlay
+    // must ride out that wobble and only be torn down (restarting the run)
+    // when something the game visibly depends on really changed.
+    func testDockWobbleKeepsTheRunningOverlay() {
+        let built = Self.makeGeometry()
+
+        XCTAssertTrue(AppState.shouldKeepRunningOverlay(
+            current: built,
+            refreshed: Self.makeGeometry(),
+            sameScreen: true
+        ))
+        XCTAssertTrue(
+            AppState.shouldKeepRunningOverlay(
+                current: built,
+                refreshed: Self.makeGeometry(
+                    visibleFrame: CGRect(x: 0, y: 60, width: 1710, height: 1014),
+                    ballSpawnPoint: CGPoint(x: 855, y: 90),
+                    floorY: 70
+                ),
+                sameScreen: true
+            ),
+            "a Dock shrunk by a minimized window must not restart the game"
+        )
+        XCTAssertFalse(
+            AppState.shouldKeepRunningOverlay(
+                current: built,
+                refreshed: Self.makeGeometry(floorY: 22, dockEdge: .hiddenOrUnknown),
+                sameScreen: true
+            ),
+            "moving the Dock to another edge must rebuild"
+        )
+        XCTAssertFalse(
+            AppState.shouldKeepRunningOverlay(
+                current: built,
+                refreshed: Self.makeGeometry(),
+                sameScreen: false
+            ),
+            "the same layout on a different display is still a display change"
+        )
+        XCTAssertFalse(AppState.shouldKeepRunningOverlay(
+            current: nil,
+            refreshed: Self.makeGeometry(),
+            sameScreen: true
+        ))
+        XCTAssertFalse(AppState.shouldKeepRunningOverlay(
+            current: built,
+            refreshed: nil,
+            sameScreen: false
+        ))
+    }
+
+    // Every field must participate in the equivalence: hardware-derived fields
+    // exactly, Dock-derived continuous fields within the tolerance. A forgotten
+    // field would make the overlay ignore a real display change.
+    func testGeometryEquivalenceChecksEveryField() {
+        let base = Self.makeGeometry()
+        XCTAssertTrue(base.isEquivalent(to: Self.makeGeometry()))
+
+        let exactRejections: [(String, ScreenGeometry)] = [
+            ("screenFrame", Self.makeGeometry(screenFrame: CGRect(x: 0, y: 0, width: 1712, height: 1112))),
+            ("safeAreaTop", Self.makeGeometry(safeAreaTop: 37)),
+            ("notchRect gone", Self.makeGeometry(notchRect: nil)),
+            ("notchRect moved", Self.makeGeometry(notchRect: CGRect(x: 749, y: 1074, width: 209, height: 38))),
+            ("dockEdge", Self.makeGeometry(dockEdge: .left))
+        ]
+        for (field, variant) in exactRejections {
+            XCTAssertFalse(base.isEquivalent(to: variant), "\(field) must be compared exactly")
+        }
+
+        let toleratedWobbles: [(String, ScreenGeometry)] = [
+            ("visibleFrame", Self.makeGeometry(visibleFrame: CGRect(x: 0, y: 60, width: 1710, height: 1014))),
+            ("hoopAnchor", Self.makeGeometry(hoopAnchor: CGPoint(x: 1500, y: 806))),
+            ("ballSpawnPoint", Self.makeGeometry(ballSpawnPoint: CGPoint(x: 855, y: 90))),
+            ("floorY", Self.makeGeometry(floorY: 70)),
+            ("leftBoundaryX", Self.makeGeometry(leftBoundaryX: 14)),
+            ("rightBoundaryX", Self.makeGeometry(rightBoundaryX: 1696))
+        ]
+        for (field, variant) in toleratedWobbles {
+            XCTAssertTrue(base.isEquivalent(to: variant), "a small \(field) wobble must be tolerated")
+        }
+
+        let largeRejections: [(String, ScreenGeometry)] = [
+            ("visibleFrame", Self.makeGeometry(visibleFrame: CGRect(x: 0, y: 146, width: 1710, height: 928))),
+            ("hoopAnchor", Self.makeGeometry(hoopAnchor: CGPoint(x: 1420, y: 800))),
+            ("ballSpawnPoint", Self.makeGeometry(ballSpawnPoint: CGPoint(x: 600, y: 96))),
+            ("floorY", Self.makeGeometry(floorY: 156)),
+            ("leftBoundaryX", Self.makeGeometry(leftBoundaryX: 88)),
+            ("rightBoundaryX", Self.makeGeometry(rightBoundaryX: 1622))
+        ]
+        for (field, variant) in largeRejections {
+            XCTAssertFalse(base.isEquivalent(to: variant), "a large \(field) change must rebuild")
+        }
+
+        XCTAssertTrue(
+            base.isEquivalent(to: Self.makeGeometry(screenName: "Sidecar")),
+            "the display name is cosmetic; identity is the display ID"
+        )
+    }
+
+    private static func makeGeometry(
+        screenFrame: CGRect = CGRect(x: 0, y: 0, width: 1710, height: 1112),
+        visibleFrame: CGRect = CGRect(x: 0, y: 66, width: 1710, height: 1008),
+        safeAreaTop: CGFloat = 38,
+        notchRect: CGRect? = CGRect(x: 751, y: 1074, width: 209, height: 38),
+        hoopAnchor: CGPoint = CGPoint(x: 1500, y: 800),
+        ballSpawnPoint: CGPoint = CGPoint(x: 855, y: 96),
+        floorY: CGFloat = 76,
+        leftBoundaryX: CGFloat = 8,
+        rightBoundaryX: CGFloat = 1702,
+        dockEdge: DockEdge = .bottom,
+        screenName: String = "Built-in Display"
+    ) -> ScreenGeometry {
+        ScreenGeometry(
+            screenFrame: screenFrame,
+            visibleFrame: visibleFrame,
+            safeAreaInsets: NSEdgeInsets(top: safeAreaTop, left: 0, bottom: 0, right: 0),
+            notchRect: notchRect,
+            hoopAnchor: hoopAnchor,
+            ballSpawnPoint: ballSpawnPoint,
+            floorY: floorY,
+            leftBoundaryX: leftBoundaryX,
+            rightBoundaryX: rightBoundaryX,
+            dockEdge: dockEdge,
+            screenName: screenName
+        )
+    }
+
     func testBallSpawnStaysInsideBoundaries() {
         let floorY: CGFloat = 80
         let spawn = ScreenGeometryService.ballSpawnPoint(

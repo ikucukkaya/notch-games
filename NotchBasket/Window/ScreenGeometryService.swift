@@ -22,6 +22,40 @@ struct ScreenGeometry {
     let screenName: String
 }
 
+extension ScreenGeometry {
+    /// Whether a freshly measured geometry is close enough to the one the game
+    /// was built from to keep the running overlay. Minimizing any window adds
+    /// an icon to the Dock and macOS shrinks the Dock to make room, wobbling
+    /// the visible frame (and everything derived from it) by a few points —
+    /// measured at ~6 pt on a MacBook Air. Hardware-derived fields must still
+    /// match exactly; only the Dock-derived continuous ones get tolerance.
+    /// The display name is deliberately ignored: display identity is decided
+    /// by CGDirectDisplayID, not by this comparison.
+    func isEquivalent(to other: ScreenGeometry, tolerance: CGFloat = 24) -> Bool {
+        func close(_ a: CGFloat, _ b: CGFloat) -> Bool { abs(a - b) <= tolerance }
+        func close(_ a: CGPoint, _ b: CGPoint) -> Bool { close(a.x, b.x) && close(a.y, b.y) }
+        func close(_ a: CGRect, _ b: CGRect) -> Bool {
+            close(a.origin, b.origin) && close(a.width, b.width) && close(a.height, b.height)
+        }
+
+        guard screenFrame == other.screenFrame,
+              safeAreaInsets.top == other.safeAreaInsets.top,
+              safeAreaInsets.left == other.safeAreaInsets.left,
+              safeAreaInsets.bottom == other.safeAreaInsets.bottom,
+              safeAreaInsets.right == other.safeAreaInsets.right,
+              notchRect == other.notchRect,
+              dockEdge == other.dockEdge
+        else { return false }
+
+        return close(visibleFrame, other.visibleFrame) &&
+            close(hoopAnchor, other.hoopAnchor) &&
+            close(ballSpawnPoint, other.ballSpawnPoint) &&
+            close(floorY, other.floorY) &&
+            close(leftBoundaryX, other.leftBoundaryX) &&
+            close(rightBoundaryX, other.rightBoundaryX)
+    }
+}
+
 protocol ScreenGeometryProviding {
     func activeScreen() -> NSScreen?
     func geometry(
