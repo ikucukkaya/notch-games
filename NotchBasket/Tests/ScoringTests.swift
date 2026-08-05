@@ -36,6 +36,30 @@ final class ScoringTests: XCTestCase {
         controller.registerUpperSensorEntry()
         XCTAssertTrue(controller.registerLowerSensorEntry(verticalVelocity: -100))
     }
+
+    // NBA and FIBA agree: a ball that enters the basket from below can never
+    // score. The dangerous shape is a lob from under the rim that apexes right
+    // inside the upper sensor — slow enough there to read as a downward entry —
+    // and then falls back through.
+    func testBallEnteringFromBelowCannotScoreFallingBack() {
+        XCTAssertFalse(controller.registerLowerSensorEntry(verticalVelocity: 180))
+        controller.registerUpperSensorEntry()
+        XCTAssertFalse(
+            controller.registerLowerSensorEntry(verticalVelocity: -90),
+            "a ball that rose into the cylinder from below must not score on the way back down"
+        )
+    }
+
+    func testCleanDescentAfterFromBelowExitScores() {
+        XCTAssertFalse(controller.registerLowerSensorEntry(verticalVelocity: 180))
+        controller.registerUpperSensorEntry()
+        XCTAssertFalse(controller.registerLowerSensorEntry(verticalVelocity: -90))
+
+        // The ball has left the bottom of the cylinder; the rulebook slate is
+        // clean and a genuine downward passage may score again.
+        controller.registerUpperSensorEntry()
+        XCTAssertTrue(controller.registerLowerSensorEntry(verticalVelocity: -140))
+    }
 }
 
 
