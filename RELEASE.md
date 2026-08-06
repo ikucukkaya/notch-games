@@ -38,3 +38,11 @@ gh release create v<version> dist/NotchBasket-<version>.dmg \
 
 Optional reach: submit a Homebrew cask (`brew create --cask`) pointing at the
 GitHub release asset.
+
+## Homebrew cask
+
+After publishing a GitHub release, update the tap
+(`/opt/homebrew/Library/Taps/ikucukkaya/homebrew-tap`, pushes to
+github.com/ikucukkaya/homebrew-tap): bump `version`, set `sha256` to
+`shasum -a 256 dist/NotchBasket-<version>.dmg`, run
+`brew audit --cask ikucukkaya/tap/notchbasket`, commit, push.

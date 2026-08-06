@@ -23,6 +23,16 @@ Download the latest `NotchBasket-x.y.dmg` from
 drag NotchBasket to Applications. That's it — the app is notarized, ~2 MB,
 asks for **no permissions**, and needs no Xcode or command line.
 
+Or with [Homebrew](https://brew.sh):
+
+```
+brew install --cask ikucukkaya/tap/notchbasket
+```
+
+The app itself never touches the network, so it won't tell you about new
+versions — installing through Homebrew means `brew upgrade` handles updates
+for you.
+
 Requirements: macOS 14 or newer.
 
 **On Windows?** There is a community-built native Windows port by
