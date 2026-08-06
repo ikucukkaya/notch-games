@@ -1,4 +1,13 @@
 import AppKit
+import SpriteKit
+
+/// The overlay is a nonactivating panel, so it is almost never the key window.
+/// A plain view swallows the first click as window activation (macOS
+/// click-through protection); the ball must be grabbable on the click that
+/// arrives, focus or no focus.
+final class GameOverlayView: SKView {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
 
 final class OverlayPanel: NSPanel {
     var onEscape: (() -> Void)?

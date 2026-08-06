@@ -52,7 +52,7 @@ final class OverlayWindowController {
         self.audioService = audioService
         self.preferences = preferences
         panel = OverlayPanel(screen: screen)
-        skView = SKView(frame: CGRect(origin: .zero, size: screen.frame.size))
+        skView = GameOverlayView(frame: CGRect(origin: .zero, size: screen.frame.size))
         scene = BasketballScene(
             size: screen.frame.size,
             geometry: geometry,

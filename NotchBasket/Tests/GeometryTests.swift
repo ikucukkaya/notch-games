@@ -169,6 +169,31 @@ final class GeometryTests: XCTestCase {
         XCTAssertGreaterThan(powerOutline.lineWidth, powerRing.lineWidth)
     }
 
+    /// The overlay is a nonactivating panel, so it is almost never the key
+    /// window: without acceptsFirstMouse the first click on the ball is
+    /// swallowed as window activation and only the second one grabs.
+    func testOverlayViewAcceptsTheFirstClick() {
+        XCTAssertTrue(GameOverlayView(frame: .zero).acceptsFirstMouse(for: nil))
+    }
+
+    func testPowerRingSweepsGreenToRed() {
+        func hue(_ fraction: CGFloat) -> CGFloat {
+            let raw = AimIndicatorNode.powerColor(fraction: fraction)
+                .usingColorSpace(.deviceRGB)!.hueComponent
+            // Pure red reports as 1.0 — the same angle as 0.0 on the wheel.
+            return raw >= 0.99 ? raw - 1 : raw
+        }
+
+        XCTAssertEqual(hue(0), 0.33, accuracy: 0.03, "no power reads green")
+        XCTAssertEqual(hue(1), 0.0, accuracy: 0.03, "full power reads red")
+        XCTAssertGreaterThan(hue(0.5), hue(0.9), "the sweep must be monotonic")
+        XCTAssertGreaterThan(hue(0.1), hue(0.5))
+
+        // Out-of-range fractions clamp instead of wrapping the hue wheel.
+        XCTAssertEqual(hue(1.4), hue(1), accuracy: 0.001)
+        XCTAssertEqual(hue(-0.2), hue(0), accuracy: 0.001)
+    }
+
     func testBottomDockInferenceAndFloor() {
         let screen = CGRect(x: 0, y: 0, width: 1440, height: 900)
         let visible = CGRect(x: 0, y: 70, width: 1440, height: 806)

@@ -99,12 +99,23 @@ final class AimIndicatorNode: SKNode {
         )
         powerOutline.path = powerPath
         powerNode.path = powerPath
-        // A saturated yellow at full power is bright, but it is also low-contrast
-        // against a white window; the dark outline behind it is what keeps the
-        // full-power cue readable rather than the hue itself.
-        powerNode.strokeColor = powerFraction >= 0.98
-            ? NSColor.systemYellow
-            : NSColor.white.withAlphaComponent(0.94)
+        // Green at rest sweeping through yellow to red at full power. Saturated
+        // hues are low-contrast against some windows; the dark outline behind
+        // the ring is what keeps it readable, not the hue itself.
+        powerNode.strokeColor = Self.powerColor(fraction: powerFraction)
+    }
+
+    /// The power ring's hue: green (0.33) at no power, through yellow, to red
+    /// (0.0) at full power. Out-of-range fractions clamp rather than wrapping
+    /// the hue wheel back toward green.
+    static func powerColor(fraction: CGFloat) -> NSColor {
+        let clamped = min(max(fraction, 0), 1)
+        return NSColor(
+            hue: 0.33 * (1 - clamped),
+            saturation: 0.85,
+            brightness: 0.95,
+            alpha: 0.96
+        )
     }
 
     func hide() {
