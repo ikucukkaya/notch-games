@@ -53,6 +53,18 @@ xcodebuild -exportArchive -archivePath "$ARCHIVE" \
   -exportOptionsPlist "$DIST/export-options.plist" \
   -exportPath "$DIST/export" -quiet
 
+echo "==> Verifying the bundle carries this version"
+# The Info.plist is explicit (GENERATE_INFOPLIST_FILE is off), so its version
+# keys have to reference the build settings. They did not until 1.0.5, and
+# every release from 1.0.1 on shipped a bundle still calling itself 1.0 —
+# invisible in the DMG name, visible in Finder. Fail loudly instead.
+BUILT_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")
+if [ "$BUILT_VERSION" != "$VERSION" ]; then
+  echo "Bundle reports $BUILT_VERSION but this release is $VERSION." >&2
+  echo "Check CFBundleShortVersionString in NotchBasket/Config/Info.plist." >&2
+  exit 1
+fi
+
 echo "==> Verifying signature"
 codesign --verify --deep --strict "$APP"
 codesign -dv "$APP" 2>&1 | grep -E "Authority|TeamIdentifier" | head -3
