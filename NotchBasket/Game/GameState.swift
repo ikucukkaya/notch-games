@@ -59,6 +59,31 @@ enum PlayMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// Watches a live figure — free play's score, a 24-second run's points —
+/// against the record the session started with, and reports the single moment
+/// it goes past. The baseline is captured at reset rather than read live,
+/// because the scene banks each new record immediately: comparing against the
+/// stored best would then announce every subsequent basket.
+struct PersonalBestTracker {
+    private var baseline: Int
+    private var hasCelebrated = false
+
+    init(record: Int) {
+        baseline = record
+    }
+
+    mutating func reset(record: Int) {
+        baseline = record
+        hasCelebrated = false
+    }
+
+    mutating func check(_ value: Int) -> Bool {
+        guard baseline > 0, !hasCelebrated, value > baseline else { return false }
+        hasCelebrated = true
+        return true
+    }
+}
+
 /// The 24-second clock's rules, kept pure and time-injected so every rule is
 /// testable without a scene. The scene owns *when* things happen (grabs, scores,
 /// shot resolutions) and asks this controller what they mean.

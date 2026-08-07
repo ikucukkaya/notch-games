@@ -63,6 +63,39 @@ final class ScoringTests: XCTestCase {
 }
 
 
+final class PersonalBestTests: XCTestCase {
+    func testCelebrationFiresOnceWhenTheRecordIsPassed() {
+        var tracker = PersonalBestTracker(record: 10)
+
+        XCTAssertFalse(tracker.check(8))
+        XCTAssertFalse(tracker.check(10), "matching the record is not beating it")
+        XCTAssertTrue(tracker.check(12))
+        XCTAssertFalse(
+            tracker.check(14),
+            "every later basket also beats the old record — celebrate once"
+        )
+    }
+
+    /// A player with no record has nothing to beat, so their first basket ever
+    /// quietly sets the mark instead of announcing one.
+    func testNoCelebrationWithoutAnExistingRecord() {
+        var tracker = PersonalBestTracker(record: 0)
+
+        XCTAssertFalse(tracker.check(2))
+        XCTAssertFalse(tracker.check(30))
+    }
+
+    func testResetArmsTheTrackerForTheNextRun() {
+        var tracker = PersonalBestTracker(record: 10)
+        XCTAssertTrue(tracker.check(12))
+
+        tracker.reset(record: 12)
+
+        XCTAssertFalse(tracker.check(12))
+        XCTAssertTrue(tracker.check(13))
+    }
+}
+
 final class ShotClockTests: XCTestCase {
     func testClockIsArmedButNotRunningUntilTheFirstGrab() {
         let clock = ShotClockController()

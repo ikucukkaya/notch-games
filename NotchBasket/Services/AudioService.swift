@@ -7,6 +7,7 @@ enum SoundEffect: CaseIterable, Hashable {
     case backboard
     case scoreTwo
     case scoreThree
+    case newBest
     case buzzer
     case deploy
     case retract
@@ -185,6 +186,65 @@ enum ScoreChimeSynthesizer {
     }
 }
 
+/// The personal-record flourish: three rising brass stabs (C5 E5 C6) with a
+/// glitter tail, pitched to sit in C major over the score arpeggio it lands on
+/// top of. Ported sample-for-sample from the auditioned candidate.
+enum NewBestFanfareSynthesizer {
+    static let duration: Double = 0.85
+
+    static func samples(sampleRate: Double) -> [Float] {
+        let frameCount = Int(duration * sampleRate)
+        var canvas = [Double](repeating: 0, count: frameCount)
+
+        // (frequency, start second, gain) — each stab louder than the last.
+        let stabs: [(Double, Double, Double)] = [
+            (523.25, 0.00, 0.80),
+            (659.25, 0.10, 0.92),
+            (1_046.5, 0.20, 1.04)
+        ]
+
+        for (frequency, start, gain) in stabs {
+            let first = Int(start * sampleRate)
+            for index in first..<frameCount {
+                let time = Double(index - first) / sampleRate
+                canvas[index] += gain * horn(time: time, frequency: frequency)
+            }
+        }
+
+        // Glitter over the last stab: a detuned high pair, gone in half a second.
+        let shimmerStart = Int(0.24 * sampleRate)
+        let shimmerEnd = min(shimmerStart + Int(0.5 * sampleRate), frameCount)
+        for index in shimmerStart..<shimmerEnd {
+            let time = Double(index - shimmerStart) / sampleRate
+            canvas[index] += 0.14 *
+                (sin(2 * .pi * 3_136 * time) + sin(2 * .pi * 3_136 * 1.006 * time)) *
+                exp(-6 * time)
+        }
+
+        var peak = 0.0
+        for index in 0..<frameCount {
+            let time = Double(index) / sampleRate
+            let attack = min(time / 0.004, 1)
+            let release = min(max((duration - time) / 0.06, 0), 1)
+            canvas[index] *= attack * release
+            peak = max(peak, abs(canvas[index]))
+        }
+
+        let scale = peak > 0 ? 0.8 / peak : 1
+        return canvas.map { Float($0 * scale) }
+    }
+
+    /// Brass-ish: odd and even harmonics over a short swell, decaying together.
+    private static func horn(time: Double, frequency: Double) -> Double {
+        let bright = 0.5
+        var value = sin(2 * .pi * frequency * time)
+        value += 0.45 * bright * sin(2 * .pi * frequency * 2 * time)
+        value += 0.22 * bright * sin(2 * .pi * frequency * 3 * time)
+        value += 0.10 * bright * sin(2 * .pi * frequency * 4 * time)
+        return value * min(time / 0.03, 1) * exp(-3.4 * time)
+    }
+}
+
 /// A tiny procedural sound bank. Generating buffers locally keeps the toy self-contained
 /// and avoids borrowing macOS alert sounds that feel unrelated to basketball.
 final class AudioService {
@@ -266,6 +326,7 @@ final class AudioService {
         case .rim, .backboard: duration = HoopImpactSynthesizer.duration
         case .scoreTwo: duration = ScoreChimeSynthesizer.duration(threePointer: false)
         case .scoreThree: duration = ScoreChimeSynthesizer.duration(threePointer: true)
+        case .newBest: duration = NewBestFanfareSynthesizer.duration
         case .buzzer: duration = 0.72
         case .deploy: duration = 0.30
         case .retract: duration = 0.24
@@ -303,6 +364,14 @@ final class AudioService {
             return buffer
         }
 
+        if effect == .newBest {
+            let fanfare = NewBestFanfareSynthesizer.samples(sampleRate: format.sampleRate)
+            for index in 0..<min(Int(frameCount), fanfare.count) {
+                samples[index] = fanfare[index]
+            }
+            return buffer
+        }
+
         if effect == .scoreTwo || effect == .scoreThree {
             let chimeSamples = ScoreChimeSynthesizer.samples(
                 sampleRate: format.sampleRate,
@@ -326,6 +395,10 @@ final class AudioService {
 
             case .rim, .backboard:
                 // Generated above by HoopImpactSynthesizer.
+                value = 0
+
+            case .newBest:
+                // Generated above by NewBestFanfareSynthesizer.
                 value = 0
 
             case .scoreTwo, .scoreThree:

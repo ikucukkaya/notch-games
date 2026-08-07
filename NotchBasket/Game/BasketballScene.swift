@@ -67,6 +67,7 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
     private var isNotchDropInProgress = false
 
     private let shotClock = ShotClockController()
+    private var personalBest = PersonalBestTracker(record: 0)
     private var pendingShotPoints = 2
     private let threePointMarking = SKNode()
     private var lastThreePointLineX: CGFloat = .nan
@@ -253,6 +254,7 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
 
     func restartSession() {
         statistics = SessionStatistics(bestStreak: preferences.bestStreak)
+        armPersonalBestTracker()
         shotClock.resetAbandoningRun()
         lastClockText = ""
         onStatisticsChanged?(statistics)
@@ -332,6 +334,7 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         if activePlayMode != preferences.playMode {
             activePlayMode = preferences.playMode
             shotClock.resetAbandoningRun()
+            armPersonalBestTracker()
             buildScoreOverlay()
             updateScoreOverlay()
         }
@@ -357,6 +360,8 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
     private func performShotClockViolation(ballHeld: Bool) {
         let run = shotClock.endRun(at: currentTime, ballHeld: ballHeld)
         preferences.registerShotClockRun(run)
+        // The finished run may itself be the new record; the next one chases it.
+        armPersonalBestTracker()
         audioService.play(.buzzer, intensity: 0.9, preferences: preferences)
         hapticService.perform(.basket, preferences: preferences)
 
@@ -742,7 +747,19 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         buildScoreOverlay()
         buildDebugLayer()
         statistics.bestStreak = preferences.bestStreak
+        armPersonalBestTracker()
         updateScoreOverlay()
+    }
+
+    /// Captures the record this session is playing against. Called wherever a
+    /// fresh chase begins: scene build, restart, a mode switch, and the horn
+    /// that ends a 24-second run.
+    private func armPersonalBestTracker() {
+        personalBest.reset(
+            record: preferences.playMode == .shotClock24
+                ? preferences.bestShotClockRun
+                : preferences.bestFreePlayScore
+        )
     }
 
     private func buildBoundaries() {
@@ -906,9 +923,18 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
         statistics.successfulShots += 1
         statistics.bestStreak = max(statistics.bestStreak, statistics.streak)
         preferences.registerBasket(streak: statistics.streak)
+        // Free play's score only ever climbs within a session, so recording it
+        // on every basket keeps the record honest however the session ends —
+        // quit, restart, or a mode change.
+        if preferences.playMode == .free {
+            preferences.registerFreePlayScore(statistics.score)
+        }
         if preferences.playMode == .shotClock24 {
             shotClock.registerScore(points: pendingShotPoints, at: currentTime)
         }
+        let isNewBest = personalBest.check(
+            preferences.playMode == .shotClock24 ? shotClock.runScore : statistics.score
+        )
         updateScoreOverlay()
         onStatisticsChanged?(statistics)
 
@@ -917,12 +943,48 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
             ScoringPolicy.scoreSound(forPoints: pendingShotPoints),
             preferences: preferences
         )
-        showScorePop()
+        if isNewBest {
+            audioService.play(.newBest, preferences: preferences)
+        }
+        showScorePop(isNewBest: isNewBest)
         emitScoreParticles()
         hapticService.perform(.basket, preferences: preferences)
         if statistics.streak == statistics.bestStreak && statistics.streak > 1 {
             hapticService.perform(.bestStreak, preferences: preferences)
         }
+    }
+
+    /// The record banner: Phosphate Inline, the vintage gym-jersey face macOS
+    /// ships, so the celebration cannot be mistaken for the plain white score
+    /// pops. Its hairline inline would disappear over a bright window, hence
+    /// the dark twin behind it — the same rule the aim guide follows.
+    static func makeNewBestBanner() -> SKNode {
+        let container = SKNode()
+        let face = NSFont(name: "Phosphate-Inline", size: 22)
+            ?? NSFont.systemFont(ofSize: 22, weight: .heavy)
+
+        func label(color: NSColor, offset: CGPoint, z: CGFloat) -> SKLabelNode {
+            let node = SKLabelNode(fontNamed: face.fontName)
+            node.text = "NEW BEST"
+            node.fontSize = 22
+            node.fontColor = color
+            node.position = offset
+            node.zPosition = z
+            return node
+        }
+
+        container.name = "newBestBanner"
+        container.addChild(label(
+            color: NSColor(calibratedWhite: 0.06, alpha: 0.85),
+            offset: CGPoint(x: 1.5, y: -1.5),
+            z: 0
+        ))
+        container.addChild(label(
+            color: NSColor(calibratedRed: 1, green: 0.80, blue: 0.24, alpha: 1),
+            offset: .zero,
+            z: 1
+        ))
+        return container
     }
 
     private func isBallCenteredInRim() -> Bool {
@@ -1083,12 +1145,15 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
             scoreLabel.fontColor = .white
             scoreLabel.text = "Score  \(statistics.score)"
             streakLabel.text = "Streak \(statistics.streak)"
-            bestLabel.text = "Best \(max(statistics.bestStreak, preferences.bestStreak))"
+            // The record the player is actually chasing is the score beside it,
+            // not the streak below — reading the live score in keeps the label
+            // truthful the instant a basket beats it.
+            bestLabel.text = "Best \(max(statistics.score, preferences.bestFreePlayScore))"
         }
         scoreOverlay.isHidden = !preferences.showScore
     }
 
-    private func showScorePop() {
+    private func showScorePop(isNewBest: Bool) {
         guard let hoop else { return }
         let label = SKLabelNode(
             fontNamed: NSFont.systemFont(ofSize: 28, weight: .bold).fontName
@@ -1105,6 +1170,26 @@ final class BasketballScene: SKScene, SKPhysicsContactDelegate {
             .group([
                 .moveBy(x: 0, y: 30, duration: 0.42),
                 .sequence([.wait(forDuration: 0.18), .fadeOut(withDuration: 0.24)])
+            ]),
+            .removeFromParent()
+        ]))
+
+        guard isNewBest else { return }
+        // Rides above the points so both read at once, and lingers a beat
+        // longer — the record falls once a session, and it should land.
+        let banner = Self.makeNewBestBanner()
+        banner.position = CGPoint(x: label.position.x, y: label.position.y + 30)
+        banner.zPosition = 121
+        banner.setScale(0.6)
+        addChild(banner)
+        banner.run(.sequence([
+            .group([
+                .sequence([
+                    .scale(to: 1.14, duration: 0.16),
+                    .scale(to: 1, duration: 0.12)
+                ]),
+                .moveBy(x: 0, y: 34, duration: 0.9),
+                .sequence([.wait(forDuration: 0.55), .fadeOut(withDuration: 0.35)])
             ]),
             .removeFromParent()
         ]))

@@ -194,6 +194,41 @@ final class GeometryTests: XCTestCase {
         XCTAssertEqual(hue(-0.2), hue(0), accuracy: 0.001)
     }
 
+    /// The banner is drawn over an unknown desktop, so it follows the same rule
+    /// as the aim guide: a dark twin behind every bright layer. Phosphate's
+    /// inline stroke would otherwise vanish over a light window.
+    func testNewBestBannerCarriesADarkLayerBehindTheGoldOne() throws {
+        let banner = BasketballScene.makeNewBestBanner()
+        let labels = banner.children.compactMap { $0 as? SKLabelNode }
+
+        XCTAssertEqual(labels.count, 2)
+        for label in labels {
+            XCTAssertEqual(label.text, "NEW BEST")
+        }
+
+        let back = try XCTUnwrap(labels.min(by: { $0.zPosition < $1.zPosition }))
+        let front = try XCTUnwrap(labels.max(by: { $0.zPosition < $1.zPosition }))
+        XCTAssertLessThan(back.zPosition, front.zPosition)
+        XCTAssertLessThan(back.fontColor?.brightnessComponentOrOne ?? 1, 0.3)
+        XCTAssertGreaterThan(front.fontColor?.brightnessComponentOrOne ?? 0, 0.8)
+        XCTAssertNotEqual(back.position, front.position, "the dark twin must be offset")
+    }
+
+    /// A celebration in the same face as every other label is not a
+    /// celebration — and the face has to be one macOS already ships, because
+    /// bundling a font would undo the app's size.
+    func testNewBestBannerUsesTheDisplayFace() throws {
+        let banner = BasketballScene.makeNewBestBanner()
+        let label = try XCTUnwrap(banner.children.compactMap { $0 as? SKLabelNode }.first)
+
+        XCTAssertNotNil(NSFont(name: "Phosphate-Inline", size: 20))
+        XCTAssertEqual(label.fontName, "Phosphate-Inline")
+        XCTAssertNotEqual(
+            label.fontName,
+            NSFont.systemFont(ofSize: 20, weight: .heavy).fontName
+        )
+    }
+
     func testBottomDockInferenceAndFloor() {
         let screen = CGRect(x: 0, y: 0, width: 1440, height: 900)
         let visible = CGRect(x: 0, y: 70, width: 1440, height: 806)
@@ -629,6 +664,27 @@ final class AudioSynthesisTests: XCTestCase {
         }
 
         XCTAssertGreaterThan(energyAtC6(three), energyAtC6(two) * 3)
+    }
+
+    func testNewBestFanfareHasFullBodyAndSilentEndpoints() throws {
+        let samples = NewBestFanfareSynthesizer.samples(sampleRate: 44_100)
+
+        XCTAssertEqual(
+            samples.count,
+            Int(NewBestFanfareSynthesizer.duration * 44_100)
+        )
+        XCTAssertEqual(try XCTUnwrap(samples.first), 0, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(samples.last), 0, accuracy: 0.001)
+        XCTAssertEqual(samples.map { abs($0) }.max() ?? 0, 0.8, accuracy: 0.02)
+    }
+
+    /// The flourish plays over the score chime, so it has to be the longer,
+    /// bigger event of the two or it reads as part of the same ping.
+    func testNewBestFanfareOutlastsTheScoreChime() {
+        XCTAssertGreaterThan(
+            NewBestFanfareSynthesizer.duration,
+            ScoreChimeSynthesizer.duration(threePointer: true)
+        )
     }
 
     func testScoreSoundMatchesPointsScored() {

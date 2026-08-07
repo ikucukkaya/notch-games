@@ -41,6 +41,7 @@ final class PreferencesService: ObservableObject {
         static let playMode = "playMode"
         static let hideFromScreenCapture = "hideFromScreenCapture"
         static let bestShotClockRun = "bestShotClockRun"
+        static let bestFreePlayScore = "bestFreePlayScore"
         static let lifetimeBaskets = "lifetimeBaskets"
         static let lifetimeShots = "lifetimeShots"
         static let hasShownOnboarding = "hasShownOnboarding"
@@ -65,6 +66,13 @@ final class PreferencesService: ObservableObject {
 
     private(set) var bestShotClockRun: Int {
         didSet { defaults.set(bestShotClockRun, forKey: Key.bestShotClockRun) }
+    }
+
+    /// Free play's headline record: the highest the score ever climbed in a
+    /// session. `bestStreak` still tracks the longest run of makes — it earns
+    /// the celebratory haptic — but it is not what the scoreboard chases.
+    private(set) var bestFreePlayScore: Int {
+        didSet { defaults.set(bestFreePlayScore, forKey: Key.bestFreePlayScore) }
     }
 
     private(set) var bestStreak: Int {
@@ -101,6 +109,7 @@ final class PreferencesService: ObservableObject {
             Key.playMode: PlayMode.shotClock24.rawValue,
             Key.hideFromScreenCapture: false,
             Key.bestShotClockRun: 0,
+            Key.bestFreePlayScore: 0,
             Key.lifetimeBaskets: 0,
             Key.lifetimeShots: 0,
             Key.hasShownOnboarding: false
@@ -124,6 +133,7 @@ final class PreferencesService: ObservableObject {
         playMode = PlayMode(rawValue: defaults.string(forKey: Key.playMode) ?? "") ?? .free
         hideFromScreenCapture = defaults.bool(forKey: Key.hideFromScreenCapture)
         bestShotClockRun = max(defaults.integer(forKey: Key.bestShotClockRun), 0)
+        bestFreePlayScore = max(defaults.integer(forKey: Key.bestFreePlayScore), 0)
         bestStreak = max(defaults.integer(forKey: Key.bestStreak), 0)
         lifetimeBaskets = max(defaults.integer(forKey: Key.lifetimeBaskets), 0)
         lifetimeShots = max(defaults.integer(forKey: Key.lifetimeShots), 0)
@@ -146,8 +156,15 @@ final class PreferencesService: ObservableObject {
         }
     }
 
+    func registerFreePlayScore(_ score: Int) {
+        if score > bestFreePlayScore {
+            bestFreePlayScore = score
+        }
+    }
+
     func resetHighScores() {
         bestStreak = 0
+        bestFreePlayScore = 0
         bestShotClockRun = 0
         lifetimeBaskets = 0
         lifetimeShots = 0
